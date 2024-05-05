@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Gdb on 0xcf9</title>
+    <link>https://example.org/tags/gdb/</link>
+    <description>Recent content in Gdb on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Mon, 14 Feb 2022 17:07:01 +0200</lastBuildDate>
+    <atom:link href="https://example.org/tags/gdb/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Quick Linux Kernel debug with QEMU, GDB and U-ROOT</title>
+      <link>https://example.org/posts/03-linux-kernel-debug/</link>
+      <pubDate>Mon, 14 Feb 2022 17:07:01 +0200</pubDate>
+      <guid>https://example.org/posts/03-linux-kernel-debug/</guid>
+      <description>When I want to harness with the Kernel, e.g., to play with some module I wrote, or just maybe learning something new about its internals I usually relay on some quick tricks to bring up a small environment to play with.&#xA;The first thing is I do is reusing the host kernel of my favorite distro: Fedora (unless some upstream feature I want to play with is not there and in that case I grab directly the sources from kernel.</description>
+    </item>
+  </channel>
+</rss>

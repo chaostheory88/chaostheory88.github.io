@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Dll on 0xcf9</title>
+    <link>https://example.org/tags/dll/</link>
+    <description>Recent content in Dll on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Wed, 19 Jan 2022 17:11:33 +0200</lastBuildDate>
+    <atom:link href="https://example.org/tags/dll/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>DLL Injection using Go</title>
+      <link>https://example.org/posts/04-go-dll-inject/</link>
+      <pubDate>Wed, 19 Jan 2022 17:11:33 +0200</pubDate>
+      <guid>https://example.org/posts/04-go-dll-inject/</guid>
+      <description>DLL injection is the act of loading a library into a running process. Purposes can be multiple ones, like hijacking or instrumenting code, extending or adding functionalities of a software without recompiling it or malicious intents like hiding malware components.&#xA;In the first part of the post we will deal with the injection itself, while in the second one we’ll build a DLL in Go emphasizing some of the limitations and try to overcome them.</description>
+    </item>
+  </channel>
+</rss>

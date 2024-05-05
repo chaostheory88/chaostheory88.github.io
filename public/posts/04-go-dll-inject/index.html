@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="author" content="">
+<meta name="description" content="DLL injection is the act of loading a library into a running process. Purposes can be multiple ones, like hijacking or instrumenting code, extending or adding functionalities of a software without recompiling it or malicious intents like hiding malware components.
+In the first part of the post we will deal with the injection itself, while in the second one we’ll build a DLL in Go emphasizing some of the limitations and try to overcome them." />
+<meta name="keywords" content=", windows, low-level, golang, dll, injection" />
+<meta name="robots" content="noodp" />
+<meta name="theme-color" content="" />
+<link rel="canonical" href="https://example.org/posts/04-go-dll-inject/" />
+
+
+    <title>
+        
+            DLL Injection using Go :: 0xcf9 
+        
+    </title>
+
+
+
+
+
+<link rel="stylesheet" href="/main.949191c1dcc9c4a887997048b240354e47152016d821198f89448496ba42e491.css" integrity="sha256-lJGRwdzJxKiHmXBIskA1TkcVIBbYIRmPiUSElrpC5JE=">
+
+
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="">
+
+
+
+  <meta itemprop="name" content="DLL Injection using Go">
+  <meta itemprop="description" content="DLL injection is the act of loading a library into a running process. Purposes can be multiple ones, like hijacking or instrumenting code, extending or adding functionalities of a software without recompiling it or malicious intents like hiding malware components.
+In the first part of the post we will deal with the injection itself, while in the second one we’ll build a DLL in Go emphasizing some of the limitations and try to overcome them.">
+  <meta itemprop="datePublished" content="2022-01-19T17:11:33+02:00">
+  <meta itemprop="dateModified" content="2022-01-19T17:11:33+02:00">
+  <meta itemprop="wordCount" content="2632">
+  <meta itemprop="keywords" content="Windows,Low-Level,Golang,Dll,Injection">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="DLL Injection using Go">
+<meta name="twitter:description" content="DLL injection is the act of loading a library into a running process. Purposes can be multiple ones, like hijacking or instrumenting code, extending or adding functionalities of a software without recompiling it or malicious intents like hiding malware components.
+In the first part of the post we will deal with the injection itself, while in the second one we’ll build a DLL in Go emphasizing some of the limitations and try to overcome them.">
+
+
+
+
+
+
+
+    <meta property="article:published_time" content="2022-01-19 17:11:33 &#43;0200 &#43;0200" />
+
+
+
+
+
+
+
+
+
+
+
+    </head>
+
+    
+        <body>
+    
+    
+        <div class="container">
+            <header class="header">
+    <span class="header__inner">
+        <a href="/" style="text-decoration: none;">
+    <div class="logo">
+        
+            <span class="logo__mark">></span>
+            <span class="logo__text ">
+                hello</span>
+            <span class="logo__cursor" style=
+                  "
+                   
+                   ">
+            </span>
+        
+    </div>
+</a>
+
+
+        <span class="header__right">
+            
+                <nav class="menu">
+    <ul class="menu__inner"><li><a href="/about/">About</a></li><li><a href="/posts/">Posts</a></li><li><a href="/tags/">Tags</a></li>
+    </ul>
+</nav>
+
+                <span class="menu-trigger">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                    </svg>
+                </span>
+            
+        </span>
+    </span>
+</header>
+
+
+            <div class="content">
+                
+  <main class="post">
+
+    <div class="post-info">
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-clock">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        13 minutes
+
+        
+      </p>
+    </div>
+
+    <article>
+      <h1 class="post-title">
+        <a href="https://example.org/posts/04-go-dll-inject/">DLL Injection using Go</a>
+      </h1>
+
+      
+
+      
+
+      
+
+      <div class="post-content">
+        <p>DLL injection is the act of loading a library into a running process. Purposes can be multiple ones, like hijacking or instrumenting code, extending or adding functionalities of a software without recompiling it or malicious intents like hiding malware components.</p>
+<p>In the first part of the post we will deal with the injection itself, while in the second one we’ll build a DLL in Go emphasizing some of the limitations and try to overcome them. The whole article targets x86-64 machines and in order to build the DLL the mingw toolchain is needed. My personal choice is to install it using cygwin, but other ways do exist, so if you don’t like it, just search for something you prefer.</p>
+<h2 id="dll-injection">DLL Injection:</h2>
+<p>In order to load a DLL into a running process what is needed are usually the following steps:</p>
+<ul>
+<li>Call OpenProcess to obtain a handle to the process</li>
+<li>Call VirtualAllocEx to allocate virtual memory into the remote process</li>
+<li>Call WriteProcessMemory with the address obtained by VirtualAllocEx in order to write the path of the DLL file into remote process memory</li>
+<li>Resolve the LoadLibraryA function address locally to the injector process. Since this function belongs to kernel32.dll which is mapped in all processes at the same address, we don’t need to resolve where it resides into our victim/remote process</li>
+<li>Call CreateRemoteThread in order to start a thread into the remote process, the entry point will be the LoadLibraryA address and its argument will be the address where we stored the DLL path</li>
+</ul>
+<p>From now on let’s see how to write code to accomplish the above steps, also notice that where possible and to make the article more readable I’m going to omit error handling.</p>
+<p>Go provides a package to deal with some Windows Win32 APIs but not all the functions we need are implemented, but this is not a problem, because we can resolve their addresses calling GetProcAddress on the kernel32.dll module.</p>
+<p>So, the first step is to obtain a handle to the process, its type is windows.Handle that is just a typecast of uintptr in Go</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// process open permissions
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">flags</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_VM_OPERATION</span> | <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_VM_READ</span> |   <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_VM_WRITE</span> | <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_CREATE_THREAD</span> | <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_QUERY_INFORMATION</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// get a handle to the process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">OpenProcess</span>(uint32(<span style="color:#a6e22e">flags</span>), <span style="color:#66d9ef">false</span>, <span style="color:#a6e22e">pid</span>)
+</span></span></code></pre></div><p>In the previous snippet of code we ask the OS which kind of permissions we want in order to operate on the process we’re opening. Of course if our process is not privileged enough in regards to the process we’re going to open the operation will fail. Flags we need are permissions for reading/writing memory, querying its basic information and creating a thread into remote process. Then we specify as the second argument the process PID.</p>
+<p>Once we’ve a process handle, next task will be to reserve a portion of memory into its VAD (virtual address space) which we’ll later use to write the DLL’s path. Since this function is not implemented into the Go x/sys/windows package, we’re going to call it indirectly:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// obtain a windows.LazyDLL object
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">kernel32</span>             <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">NewLazySystemDLL</span>(<span style="color:#e6db74">&#34;kernel32.dll&#34;</span>)
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// obtain a windows.LazyProc object
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">virtualAllocEx</span>       <span style="color:#f92672">:=</span> <span style="color:#a6e22e">kernel32</span>.<span style="color:#a6e22e">NewProc</span>(<span style="color:#e6db74">&#34;VirtualAllocEx&#34;</span>)
+</span></span></code></pre></div><p>Now we can implement a wrapper around VirtualAllocEx</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// VirtualAllocEx wrapper
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">VirtualAllocEx</span>(<span style="color:#a6e22e">pHandle</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Handle</span>, <span style="color:#a6e22e">size</span>, <span style="color:#a6e22e">allocType</span>, <span style="color:#a6e22e">allocProt</span> <span style="color:#66d9ef">uintptr</span>) (<span style="color:#66d9ef">uintptr</span>, <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// allocate virtual memory into remote process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">addr</span>, <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">virtualAllocEx</span>.<span style="color:#a6e22e">Call</span>(
+</span></span><span style="display:flex;"><span>        uintptr(<span style="color:#a6e22e">pHandle</span>),   <span style="color:#75715e">// handle
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),         <span style="color:#75715e">// addr where allocate (0 since we ask the OS to assign one)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">size</span>),      <span style="color:#75715e">// size of allocation
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">allocType</span>), <span style="color:#75715e">// type of allocation
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">allocProt</span>)) <span style="color:#75715e">// protection of the allocation
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">addr</span> <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">addr</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>We specify the required parameters to the Call function, the process handle, the allocation size and the protection flags, we default the allocation address to 0 since we leave the task to choose an address for the mapping to the OS. Notice that we do not check directly for error, but instead we check if the addr is equal to 0. We do this because the return from VirtualAllocEx is NULL in case of error, and one should later check about the error code calling GetLastError Windows API. The LazyProc.Call combines this behavior, so we return err just in case addr == 0. Since all the wrappers we’re going to write are implemented in the same way, I’m not going to repeat this concept further.</p>
+<p>In order to invoke our wrapper we do:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// flags for VirtualAllocEx
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">allocType</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">MEM_RESERVE</span> | <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">MEM_COMMIT</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">allocProt</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PAGE_READWRITE</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">size</span> <span style="color:#f92672">:=</span> <span style="color:#ae81ff">4096</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// alloc virtual memory into remote process and grab the address
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">addr</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">VirtualAllocEx</span>(<span style="color:#a6e22e">pHandle</span>, uintptr(<span style="color:#a6e22e">size</span>), uintptr(<span style="color:#a6e22e">allocType</span>), uintptr(<span style="color:#a6e22e">allocProt</span>))
+</span></span></code></pre></div><p>We ask the OS to directly commit the memory (despite this will not allocate it, because memory will be allocated on the first access). We also specify READ/WRITE permissions and a size of 4K (specifying less won’t actually make sense since VirtualAllocEx will anyway default to a page boundary allocation). If the call succeeds we get back the address of the allocated memory into the remote process (this means that this address is valid just into the VAD of another process, and can’t be accessed directly from our process through e.g. a dereference).</p>
+<p>Now we can write the DLL path into the remote process memory, but in order to accomplish it we need to invoke the WriteProcessMemory function. We need to write a wrapper for it too since not directly available into the Go package.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// resolve the windows.LazyProc object
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">writeProcessMemory</span>   = <span style="color:#a6e22e">kernel32</span>.<span style="color:#a6e22e">NewProc</span>(<span style="color:#e6db74">&#34;WriteProcessMemory&#34;</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// WriteProcessMemory wrapper
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">WriteProcessMemory</span>(<span style="color:#a6e22e">pHandle</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Handle</span>, <span style="color:#a6e22e">addr</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">path</span> <span style="color:#f92672">*</span><span style="color:#66d9ef">byte</span>, <span style="color:#a6e22e">len</span> <span style="color:#66d9ef">uintptr</span>) (<span style="color:#a6e22e">ret</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// write DLL path into remote process memory
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">ret</span>, <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">writeProcessMemory</span>.<span style="color:#a6e22e">Call</span>(
+</span></span><span style="display:flex;"><span>        uintptr(<span style="color:#a6e22e">pHandle</span>),                      <span style="color:#75715e">// process handle
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">addr</span>),                         <span style="color:#75715e">// remote process address
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">unsafe</span>.<span style="color:#a6e22e">Pointer</span>(<span style="color:#a6e22e">path</span>)),         <span style="color:#75715e">// buffer to write
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">len</span>),                          <span style="color:#75715e">// length of the buffer
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>)) <span style="color:#75715e">// bytes actually written (we set it to NULL)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">ret</span> <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">ret</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>We pass the process handle, the address into the remote process VAD, the buffer we are going to write and its length. We set to NULL the number of bytes written return variable (since we’re not interested in).</p>
+<p>We can now invoke it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// convert string to pointer of bytes
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">pathBytes</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">BytePtrFromString</span>(<span style="color:#a6e22e">dllPath</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// write DLL path to remote process memory
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">retWrite</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">WriteProcessMemory</span>(<span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">addr</span>, <span style="color:#a6e22e">pathBytes</span>, uintptr(len(<span style="color:#a6e22e">dllPath</span>)))
+</span></span></code></pre></div><p>WriteProcessMemory receives a pointer and we cannot of course pass a Go string we need a way to translate it to a *byte pointer. Luckily for us the package as BytePtrFromString facility which accomplishes the job.</p>
+<p>Now the last piece of the puzzle. We need to start a remote thread into the target process that will call LoadLibraryA(addressOfDLLPath). Another wrapper is necessary:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// grab the LazyProc related to CreateRemoteThread
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">createRemoteThreadEx</span> = <span style="color:#a6e22e">kernel32</span>.<span style="color:#a6e22e">NewProc</span>(<span style="color:#e6db74">&#34;CreateRemoteThreadEx&#34;</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// CreateRemoteThreadEx wrapper
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">CreateRemoteThreadEx</span>(<span style="color:#a6e22e">pHandle</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Handle</span>, <span style="color:#a6e22e">remoteProcAddr</span>, <span style="color:#a6e22e">argAddr</span> <span style="color:#66d9ef">uintptr</span>) (<span style="color:#a6e22e">handle</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// create a remote thread into the targeted process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">handle</span>, <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">createRemoteThreadEx</span>.<span style="color:#a6e22e">Call</span>(
+</span></span><span style="display:flex;"><span>        uintptr(<span style="color:#a6e22e">pHandle</span>), <span style="color:#75715e">// process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),       <span style="color:#75715e">// security attributes NULL
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),       <span style="color:#75715e">// 0 means stack size will be the default based on binary attributes
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">remoteProcAddr</span>,   <span style="color:#75715e">// address of the entry point for this thread
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">argAddr</span>,          <span style="color:#75715e">// address of the argument to the entry point function in this case &#34;LoadLibraryA(ourDllPAth)&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),       <span style="color:#75715e">// thread creations flag default none, it starts executing
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),       <span style="color:#75715e">// pointer to returned threadID, we don&#39;t need it
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    )
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">handle</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>OK, we just now need to invoke it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// call LoadLibraryA(dllPath)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">remThreadHandle</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CreateRemoteThreadEx</span>(<span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">loadLibraryA</span>.<span style="color:#a6e22e">Addr</span>(), <span style="color:#a6e22e">addr</span>)
+</span></span></code></pre></div><p>So this was the recipe to inject a DLL in Go in Windows process, it is identical to what one would have done for example in C, except we’re using Go abstractions and the x/sys/windows package.</p>
+<h3 id="injecting-a-dll-written-in-go">Injecting a DLL written in Go:</h3>
+<p>What we’ve assumed into the previous part of the post is that we’re injecting a DLL written in C/C++ or any other language which supports writing DLLs and that provides a DllMain function implemented. When a DLL gets loaded or unloaded, the DllMain gets invoked and should check the reason of its invocation, the next snippet of code should be self explanatory:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>BOOL WINAPI <span style="color:#a6e22e">DllMain</span>(
+</span></span><span style="display:flex;"><span>    HINSTANCE hinstDLL,  <span style="color:#75715e">// handle to DLL module
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    DWORD fdwReason,     <span style="color:#75715e">// reason for calling function
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    LPVOID lpReserved )  <span style="color:#75715e">// reserved
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Perform actions based on the reason for calling.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">switch</span>( fdwReason ) 
+</span></span><span style="display:flex;"><span>    { 
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">case</span> DLL_PROCESS_ATTACH:
+</span></span><span style="display:flex;"><span>         <span style="color:#75715e">// Initialize once for each new process.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>         <span style="color:#75715e">// Return FALSE to fail DLL load.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>            <span style="color:#66d9ef">break</span>;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">case</span> DLL_THREAD_ATTACH:
+</span></span><span style="display:flex;"><span>         <span style="color:#75715e">// Do thread-specific initialization.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>            <span style="color:#66d9ef">break</span>;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">case</span> DLL_THREAD_DETACH:
+</span></span><span style="display:flex;"><span>         <span style="color:#75715e">// Do thread-specific cleanup.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>            <span style="color:#66d9ef">break</span>;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">case</span> DLL_PROCESS_DETACH:
+</span></span><span style="display:flex;"><span>         <span style="color:#75715e">// Perform any necessary cleanup.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>            <span style="color:#66d9ef">break</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> TRUE;  <span style="color:#75715e">// Successful DLL_PROCESS_ATTACH.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>}
+</span></span></code></pre></div><p>So basically whoever has implemented a DLL in a standard way can relay on the fact that as soon it gets loaded into the process the DllMain will give a chance to do something (benign or malicious intents).</p>
+<p>Unfortunately writing a DLL in Go will not produce the same effect, and if we compile a Go binary as a c-shared library, when loaded into the remote process it will just sticks there in memory doing nothing… Unless the target process does not call directly on some exported function. Let’s make an example:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> (
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;os&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> <span style="color:#e6db74">&#34;C&#34;</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">//export Init
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">Init</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">pid</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Getpid</span>()
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">f</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Create</span>(<span style="color:#e6db74">&#34;C:\\Users\\SomeUser\\Desktop\\test.txt&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">Close</span>()
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">WriteString</span>(<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Sprintf</span>(<span style="color:#e6db74">&#34;PID: %d\n&#34;</span>, <span style="color:#a6e22e">pid</span>))
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>This Go code exports a function called Init that will just write its PID into a file on the Desktop of SomeUser. The main function is empty, and this is for a reason: when we are going to compile a Go binary as a DLL its main function will never be called. And that’s obvious because as we said before the Windows loader will invoke something called DllMain. Let’s see if such function exists in a Go DLL binary and if there let’s examine what it does (notice that we need to specify the CC compiler variable in order to build a Go DLL on Windows, it actually just works with the mingw one):</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>CC<span style="color:#f92672">=</span>x86_64-w64-mingw32-gcc go build -o some.dll -buildmode<span style="color:#f92672">=</span>c-shared some.go
+</span></span></code></pre></div><p><img src="/dll_inject_go.webp" alt="injection"></p>
+<p>When the DLL gets loaded its DllMain returns just TRUE. So its obvious that we need to find a way to tell the remote process it has to invoke something, e.g. our Init function.</p>
+<p>Theoretically we could just do the same thing we did in order to invoke the LoadLibraryA function using CreateRemoteThreadEx and giving it the address of Init. But fact is that for non system DLLs it can happen that they reside at some different addresses, in fact in case the VAD portion of a process the DLL would like to be loaded is already occupied, so the loader will fix and relocate it elsewhere into the target memory process. So, we need to understand where the DLL has been loaded and and where the Init function address resides. But how?</p>
+<p>Windows comes with a nice APIs to grab information about processes, loaded DLLs and heap memory status, this is the Tool Help Library. We’re also lucky enough because this set of APIs has been already wrapped into the x/sys/windows package.</p>
+<p>So in order to get where the DLL we just loaded resides into the remote process VAD we can use the following code:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// SearchModuleAddr returns the base address of a module
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">SearchModuleAddr</span>(<span style="color:#a6e22e">searchDLL</span> <span style="color:#66d9ef">string</span>, <span style="color:#a6e22e">pid</span> <span style="color:#66d9ef">uint32</span>) (<span style="color:#a6e22e">addr</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">size</span> <span style="color:#66d9ef">uint32</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// create a snapshot
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">handle</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">CreateToolhelp32Snapshot</span>(<span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">TH32CS_SNAPMODULE</span>, <span style="color:#a6e22e">pid</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;failed to create snapshot: %s&#34;</span>, <span style="color:#a6e22e">err</span>.<span style="color:#a6e22e">Error</span>())
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// setup the entry with its own size
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">var</span> <span style="color:#a6e22e">entry</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">ModuleEntry32</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">entry</span>.<span style="color:#a6e22e">Size</span> = uint32(<span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">SizeofModuleEntry32</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// get first entry
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Module32First</span>(<span style="color:#a6e22e">handle</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">entry</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;failed to get first module: %s&#34;</span>, <span style="color:#a6e22e">err</span>.<span style="color:#a6e22e">Error</span>())
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// parse the exepath to a Unicode string
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#66d9ef">var</span> <span style="color:#a6e22e">dllName</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">NTUnicodeString</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">RtlInitUnicodeString</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">dllName</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">entry</span>.<span style="color:#a6e22e">ExePath</span>[<span style="color:#ae81ff">0</span>])
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// transform into Go string and get the DLL name
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">dllNameS</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">filepath</span>.<span style="color:#a6e22e">Base</span>(<span style="color:#a6e22e">dllName</span>.<span style="color:#a6e22e">String</span>())
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// check if it&#39;s the one we&#39;re looking for
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">dllNameS</span> <span style="color:#f92672">==</span> <span style="color:#a6e22e">searchDLL</span> {
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">addr</span> = <span style="color:#a6e22e">entry</span>.<span style="color:#a6e22e">ModBaseAddr</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">size</span> = <span style="color:#a6e22e">entry</span>.<span style="color:#a6e22e">ModBaseSize</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Module32Next</span>(<span style="color:#a6e22e">handle</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">entry</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">addr</span> <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;unable to retrieve: %s library&#34;</span>, <span style="color:#a6e22e">searchDLL</span>)
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">addr</span>, <span style="color:#a6e22e">size</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>This function receives as an input a DLL name and a PID, then it creates a snapshot of loaded modules for the given process and iterates over them. If we find a DLL which name is equal to the one we provided it returns its address and size, otherwise returns an error.</p>
+<p>Once we’ve the address of the DLL we need to understand where the Init function is located. So we’ve two possibilities at this point:</p>
+<ul>
+<li>we can load the DLL into our own process and compare the address with the one of the remote process (there’s chance has not been relocated) and if they match we can easily grab the address of Init with GetProcAddr and pass it directly to CreateRemoteThreadEx</li>
+<li>we inspect the Export Table of the DLL, and locate the RVA (relative virtual address) of the Init function and then we add it to the in memory base image address of the DLL</li>
+</ul>
+<p>So here a snippet of code:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#a6e22e">rva</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">SearchDLLFunctionAddr</span>(<span style="color:#a6e22e">dllPath</span>, <span style="color:#e6db74">&#34;Init&#34;</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// load DLL into our own process so we can resolve the Init symbol
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">dll</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">LoadDLL</span>(<span style="color:#a6e22e">dllPath</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// get the Init function address
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">initFunc</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">dll</span>.<span style="color:#a6e22e">FindProc</span>(<span style="color:#e6db74">&#34;Init&#34;</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// search the module addr into remote process memory
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">dllAddr</span>, <span style="color:#a6e22e">_</span> , <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">SearchModuleAddr</span>(<span style="color:#a6e22e">filepath</span>.<span style="color:#a6e22e">Base</span>(<span style="color:#a6e22e">dllPath</span>), uint32(<span style="color:#a6e22e">pid</span>))
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// if DLLs got mapped both at the same address we can call Init function directly
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">// with the address we resolved locally from loading DLL into our own process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">if</span> <span style="color:#a6e22e">dllAddr</span> <span style="color:#f92672">==</span> uintptr(<span style="color:#a6e22e">dll</span>.<span style="color:#a6e22e">Handle</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// invoke Init into remote process since we now have the address
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">remoteThreadInitCallHandle</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CreateRemoteThreadEx</span>(<span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">initFunc</span>.<span style="color:#a6e22e">Addr</span>(), uintptr(<span style="color:#ae81ff">0</span>))
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>} <span style="color:#66d9ef">else</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// we sum the RVA to the remote DLL addr and create manually address for Init function
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">remoteAddr</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">dllAddr</span> <span style="color:#f92672">+</span> uintptr(<span style="color:#a6e22e">rva</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">remoteThreadInitCallHandle</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CreateRemoteThreadEx</span>(<span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">remoteAddr</span>, uintptr(<span style="color:#ae81ff">0</span>))
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>What’s missing is how we get the RVA of the Init function into the DLL. I’ve accomplished the task using this really nice library which parses PE binaries.</p>
+<p>And here is the code used:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// SearchDLLFunctionAddr searches a function inside a DLL
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">SearchDLLFunctionAddr</span>(<span style="color:#a6e22e">dll</span>, <span style="color:#a6e22e">function</span> <span style="color:#66d9ef">string</span>) (<span style="color:#a6e22e">rva</span> <span style="color:#66d9ef">uint32</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">peFile</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pe</span>.<span style="color:#a6e22e">New</span>(<span style="color:#a6e22e">dll</span>, <span style="color:#66d9ef">nil</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">peFile</span>.<span style="color:#a6e22e">Close</span>()
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">peFile</span>.<span style="color:#a6e22e">Parse</span>()
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">te</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">range</span> <span style="color:#a6e22e">peFile</span>.<span style="color:#a6e22e">Export</span>.<span style="color:#a6e22e">Functions</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">function</span> <span style="color:#f92672">==</span> <span style="color:#a6e22e">te</span>.<span style="color:#a6e22e">Name</span> {
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;[+] Name: %s, RVA: 0x%08X\n&#34;</span>, <span style="color:#a6e22e">te</span>.<span style="color:#a6e22e">Name</span>, <span style="color:#a6e22e">te</span>.<span style="color:#a6e22e">FunctionRVA</span>)
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">rva</span> = <span style="color:#a6e22e">te</span>.<span style="color:#a6e22e">FunctionRVA</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">rva</span> <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;function: %s not found&#34;</span>, <span style="color:#a6e22e">function</span>)
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">rva</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Also if you’re curious to understand how a PE gets parsed look at the internals of the library, code is really self explanatory and full of comments.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ ./injector -pid <span style="color:#ae81ff">17960</span> -dllpath <span style="color:#e6db74">&#34;C:\\Users\\..\\evil.dll&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Name: Init, RVA: 0x0008FA50
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Handle: 0x144
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> VirtualAllocEx addr: 0x1a2a4af0000
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> LoadLibraryA: 0x7ff930de04f0
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Local Mapped DLL Addr: 0x7ff8e14f0000
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Local Init<span style="color:#f92672">()</span> func addr: 0x7ff8e157fa50
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Calling CreateRemoteThread with locally resolved Init <span style="color:#66d9ef">function</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Remote DLL addr: 0x7ff8e14f0000, size: <span style="color:#ae81ff">3678208</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Calculated <span style="color:#66d9ef">function</span>: 0x7ff8e157fa50
+</span></span></code></pre></div><p>Above the output of a small tool I wrote to test the code and below the output of tlist.exe which shows the DLL mapped into the notepad.exe process:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>..snip... 
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF92C070000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>ystem32<span style="color:#ae81ff">\C</span>oreUIComponents.dll
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF930A40000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>ystem32<span style="color:#ae81ff">\W</span>S2_32.dll
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF92E670000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>YSTEM32<span style="color:#ae81ff">\n</span>tmarta.dll
+</span></span><span style="display:flex;"><span>                    0x00007FF8E14F0000  C:<span style="color:#ae81ff">\U</span>sers<span style="color:#ae81ff">\.</span>..<span style="color:#ae81ff">\e</span>vil.dll
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF92F1D0000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\s</span>ystem32<span style="color:#ae81ff">\C</span>RYPTBASE.DLL
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF91CF50000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>YSTEM32<span style="color:#ae81ff">\w</span>inmm.dll
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF92F830000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>YSTEM32<span style="color:#ae81ff">\p</span>owrprof.dll
+</span></span><span style="display:flex;"><span>...snip...
+</span></span></code></pre></div><p>Here we can see that the DLL just wrote a simple text file on the desktop with its PID</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ cat c:/Users/.../Desktop/test.txt
+</span></span></code></pre></div><p>Notice that unload the DLL from the process can actually crash it, since this will in interfere with running goroutines.</p>
+<p>So that’s all about I did experimenting with Go and DLLs, hope you find it useful.</p>
+
+      </div>
+    </article>
+
+    <hr />
+
+    <div class="post-info">
+      
+    <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-tag meta-icon"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7" y2="7"></line></svg>
+
+        <span class="tag"><a href="https://example.org/tags/windows/">windows</a></span>
+        <span class="tag"><a href="https://example.org/tags/low-level/">low-level</a></span>
+        <span class="tag"><a href="https://example.org/tags/golang/">golang</a></span>
+        <span class="tag"><a href="https://example.org/tags/dll/">dll</a></span>
+        <span class="tag"><a href="https://example.org/tags/injection/">injection</a></span>
+        
+    </p>
+
+      
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file-text">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        2632 Words
+      </p>
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-calendar">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        
+          2022-01-19 16:11
+        
+
+         
+          
+        
+      </p>
+    </div>
+
+    
+    <div class="pagination">
+        
+
+        <div class="pagination__buttons">
+            
+            <span class="button previous">
+                <a href="https://example.org/posts/03-linux-kernel-debug/">
+                    <span class="button__icon">←</span>
+                    <span class="button__text">Quick Linux Kernel debug with QEMU, GDB and U-ROOT</span>
+                </a>
+            </span>
+            
+
+            
+            <span class="button next">
+                <a href="https://example.org/posts/08-books-2021-2/">
+                    <span class="button__text">Books I&#39;ve read in 2021</span>
+                    <span class="button__icon">→</span>
+                </a>
+            </span>
+            
+        </div>
+    </div>
+
+
+    
+
+    
+
+    
+
+  </main>
+
+            </div>
+
+            
+                <footer class="footer">
+    
+    
+</footer>
+
+            
+        </div>
+
+        
+
+
+
+<script type="text/javascript" src="/bundle.min.85fad2de4f13fec3bcb3b3cb10430cdb44a7b4a9749b32938241a5c6e77718df7624f1002b880521fdc26e24ec1077fda214bf1cb36ee3045510760d09638cae.js" integrity="sha512-hfrS3k8T/sO8s7PLEEMM20SntKl0mzKTgkGlxud3GN92JPEAK4gFIf3CbiTsEHf9ohS/HLNu4wRVEHYNCWOMrg=="></script>
+
+
+
+
+    </body>
+</html>

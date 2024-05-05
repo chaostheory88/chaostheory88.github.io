@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Linux on 0xcf9</title>
+    <link>https://example.org/tags/linux/</link>
+    <description>Recent content in Linux on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Thu, 17 Feb 2022 14:55:03 +0200</lastBuildDate>
+    <atom:link href="https://example.org/tags/linux/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Build a simple fuzzer with libFuzzer</title>
+      <link>https://example.org/posts/02-libfuzzer/</link>
+      <pubDate>Thu, 17 Feb 2022 14:55:03 +0200</pubDate>
+      <guid>https://example.org/posts/02-libfuzzer/</guid>
+      <description>libFuzzer is coverage-guided, evolutionary fuzzing engine. And it’s a wonderful tool to help with bug hunting.&#xA;To quote the libFuzzer page:&#xA;LibFuzzer is linked with the library under test, and feeds fuzzed inputs to the library via a specific fuzzing entrypoint (aka “target function”); the fuzzer then tracks which areas of the code are reached, and generates mutations on the corpus of input data in order to maximize the code coverage.</description>
+    </item>
+    <item>
+      <title>Quick Linux Kernel debug with QEMU, GDB and U-ROOT</title>
+      <link>https://example.org/posts/03-linux-kernel-debug/</link>
+      <pubDate>Mon, 14 Feb 2022 17:07:01 +0200</pubDate>
+      <guid>https://example.org/posts/03-linux-kernel-debug/</guid>
+      <description>When I want to harness with the Kernel, e.g., to play with some module I wrote, or just maybe learning something new about its internals I usually relay on some quick tricks to bring up a small environment to play with.&#xA;The first thing is I do is reusing the host kernel of my favorite distro: Fedora (unless some upstream feature I want to play with is not there and in that case I grab directly the sources from kernel.</description>
+    </item>
+    <item>
+      <title>Nastry Tricks with Go Generate</title>
+      <link>https://example.org/posts/06-nastry-tricks-go-generate/</link>
+      <pubDate>Wed, 24 Nov 2021 17:29:14 +0200</pubDate>
+      <guid>https://example.org/posts/06-nastry-tricks-go-generate/</guid>
+      <description>Nasty tricks with go generate novembre 24th, 2021&#xA;What follows here is just a general idea of how and individual with malicious intent can theoretically attack a CI system or a build machine using the go generate tool.&#xA;The idea is very simple, first the attacker should embed a go generate directive into its application, then at build time (using make or cmake or whatever it’s used to run the build) should run the go generate command.</description>
+    </item>
+    <item>
+      <title>Embed and execute from memory with Golang</title>
+      <link>https://example.org/posts/01-go-embed/</link>
+      <pubDate>Tue, 22 Jun 2021 14:33:57 +0200</pubDate>
+      <guid>https://example.org/posts/01-go-embed/</guid>
+      <description>In this post I’ll show how to embed a file into a Golang binary and then how this file will be loaded and executed from memory on Linux with the aid of memfd_create(2) and execveat(2).&#xA;Since version 1.16 Golang introduced a nice feature which allows embedding a file or a hierarchy of files into a binary. The embedded content can then be accessed as a string, []byte slice or embed.FS object.</description>
+    </item>
+    <item>
+      <title>Having fun and really no profit with $ORIGIN expansion variable in Java</title>
+      <link>https://example.org/posts/05-elf-origin-expansion/</link>
+      <pubDate>Mon, 30 Jan 2017 17:22:16 +0200</pubDate>
+      <guid>https://example.org/posts/05-elf-origin-expansion/</guid>
+      <description>Having fun and really no profit with $ORIGIN expansion variable in Java gennaio 30th, 2017&#xA;Days ago I was reading this [0] interesting article about the dynamic linker expansion variables, and so I tought it would be fun to search for binaries with the RPATH dynamic tag containing the $ORIGIN variable.&#xA;So digging through dynamic tags using eu-readelf -d I found that the java ELF binary has the following RPATH:</description>
+    </item>
+  </channel>
+</rss>

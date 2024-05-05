@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Books on 0xcf9</title>
+    <link>https://example.org/tags/books/</link>
+    <description>Recent content in Books on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 31 Dec 2022 17:46:40 +0200</lastBuildDate>
+    <atom:link href="https://example.org/tags/books/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Books list 2022</title>
+      <link>https://example.org/posts/09-books-2022/</link>
+      <pubDate>Sat, 31 Dec 2022 17:46:40 +0200</pubDate>
+      <guid>https://example.org/posts/09-books-2022/</guid>
+      <description>Another year, another list of books.&#xA;Rust for Rustaceans Practical IoT Hacking Rock Guitar Tapping Technique Linux Kernel Debugging The Legendary Guitar of Jason Becker Marty Friedman: Exotic Metal Guitar Il Richiamo di Cthulhu (Gou Tanabe – Graphic Novel) Le Montagne della Follia (Gou Tanabe – Graphic Novel) </description>
+    </item>
+    <item>
+      <title>Books I&#39;ve read in 2021</title>
+      <link>https://example.org/posts/08-books-2021-2/</link>
+      <pubDate>Wed, 22 Dec 2021 17:44:33 +0200</pubDate>
+      <guid>https://example.org/posts/08-books-2021-2/</guid>
+      <description>Here’s the list of books I’ve enjoyed during 2021. Since I’m an avid reader (more than probably I like to write), I’ll try to write down a note about books I liked every year.&#xA;Linux Kernel Programming Vol 1 and Vol 2 – I try always to keep up to date with Linux Kernel development, reading all the stuff that gets published around the topic Windows 10 System Programming Vol 1 and Vol 2 – One of the best book I’ve ever read about system programming, I’m not a Windows guy (except for music production stuff, but since I like low level stuff and system programming, why not?</description>
+    </item>
+    <item>
+      <title>Books I’ve enjoyed between a lockdown and a red zone</title>
+      <link>https://example.org/posts/07-books-2021/</link>
+      <pubDate>Sun, 03 Jan 2021 17:31:22 +0200</pubDate>
+      <guid>https://example.org/posts/07-books-2021/</guid>
+      <description>2020 for sure has been an unconventional year. Humanity has been hit by a catastrophe and people habits have changed a lot. Spending most time at home for some has been uncomfortable, for others like me, working in IT, not that much has been changed to be honest. Despite difficulties to see friends and hang for a beer or being distant from family, it’s not that I spend too much time distant from my laptop or guitars.</description>
+    </item>
+  </channel>
+</rss>

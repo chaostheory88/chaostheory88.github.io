@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="author" content="">
+<meta name="description" content="libFuzzer is coverage-guided, evolutionary fuzzing engine. And it’s a wonderful tool to help with bug hunting.
+To quote the libFuzzer page:
+LibFuzzer is linked with the library under test, and feeds fuzzed inputs to the library via a specific fuzzing entrypoint (aka “target function”); the fuzzer then tracks which areas of the code are reached, and generates mutations on the corpus of input data in order to maximize the code coverage." />
+<meta name="keywords" content=", fuzzing, libfuzzer, clamav, low-level, linux" />
+<meta name="robots" content="noodp" />
+<meta name="theme-color" content="" />
+<link rel="canonical" href="https://example.org/posts/02-libfuzzer/" />
+
+
+    <title>
+        
+            Build a simple fuzzer with libFuzzer :: 0xcf9 
+        
+    </title>
+
+
+
+
+
+<link rel="stylesheet" href="/main.949191c1dcc9c4a887997048b240354e47152016d821198f89448496ba42e491.css" integrity="sha256-lJGRwdzJxKiHmXBIskA1TkcVIBbYIRmPiUSElrpC5JE=">
+
+
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="">
+
+
+
+  <meta itemprop="name" content="Build a simple fuzzer with libFuzzer">
+  <meta itemprop="description" content="libFuzzer is coverage-guided, evolutionary fuzzing engine. And it’s a wonderful tool to help with bug hunting.
+To quote the libFuzzer page:
+LibFuzzer is linked with the library under test, and feeds fuzzed inputs to the library via a specific fuzzing entrypoint (aka “target function”); the fuzzer then tracks which areas of the code are reached, and generates mutations on the corpus of input data in order to maximize the code coverage.">
+  <meta itemprop="datePublished" content="2022-02-17T14:55:03+02:00">
+  <meta itemprop="dateModified" content="2022-02-17T14:55:03+02:00">
+  <meta itemprop="wordCount" content="1336">
+  <meta itemprop="keywords" content="Fuzzing,Libfuzzer,Clamav,Low-Level,Linux">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Build a simple fuzzer with libFuzzer">
+<meta name="twitter:description" content="libFuzzer is coverage-guided, evolutionary fuzzing engine. And it’s a wonderful tool to help with bug hunting.
+To quote the libFuzzer page:
+LibFuzzer is linked with the library under test, and feeds fuzzed inputs to the library via a specific fuzzing entrypoint (aka “target function”); the fuzzer then tracks which areas of the code are reached, and generates mutations on the corpus of input data in order to maximize the code coverage.">
+
+
+
+
+
+
+
+    <meta property="article:published_time" content="2022-02-17 14:55:03 &#43;0200 &#43;0200" />
+
+
+
+
+
+
+
+
+
+
+
+    </head>
+
+    
+        <body>
+    
+    
+        <div class="container">
+            <header class="header">
+    <span class="header__inner">
+        <a href="/" style="text-decoration: none;">
+    <div class="logo">
+        
+            <span class="logo__mark">></span>
+            <span class="logo__text ">
+                hello</span>
+            <span class="logo__cursor" style=
+                  "
+                   
+                   ">
+            </span>
+        
+    </div>
+</a>
+
+
+        <span class="header__right">
+            
+                <nav class="menu">
+    <ul class="menu__inner"><li><a href="/about/">About</a></li><li><a href="/posts/">Posts</a></li><li><a href="/tags/">Tags</a></li>
+    </ul>
+</nav>
+
+                <span class="menu-trigger">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                    </svg>
+                </span>
+            
+        </span>
+    </span>
+</header>
+
+
+            <div class="content">
+                
+  <main class="post">
+
+    <div class="post-info">
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-clock">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        7 minutes
+
+        
+      </p>
+    </div>
+
+    <article>
+      <h1 class="post-title">
+        <a href="https://example.org/posts/02-libfuzzer/">Build a simple fuzzer with libFuzzer</a>
+      </h1>
+
+      
+
+      
+
+      
+
+      <div class="post-content">
+        <p>libFuzzer is coverage-guided, evolutionary fuzzing engine. And it’s a wonderful tool to help with bug hunting.</p>
+<p>To quote the libFuzzer page:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>LibFuzzer is linked with the library under test, and feeds fuzzed inputs to the library via a specific fuzzing entrypoint (aka “target function”); the fuzzer then tracks which areas of the code are reached, and generates mutations on the corpus of input data in order to maximize the code coverage. The code coverage information for libFuzzer is provided by LLVM’s SanitizerCoverage instrumentation.
+</span></span></code></pre></div><p>So basically once it gets linked with your library it provides an easy way to feed mutated input to a target function at each iteration and the mutation is done in a way that tries to maximize the code coverage. All clear.</p>
+<p>What we want to accomplish here is to write a simple fuzzer for libclamav, the library at the core of ClamAV antivirus.</p>
+<p>So the first step is understanding how we’re going to link libFuzzer to libclamav when building ClamAV and its components.</p>
+<p>To quote libFuzzer documentation:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>If modifying CFLAGS of a large project, which also compiles executables requiring their own main symbol, it may be desirable to request just the instrumentation without linking:
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>clang -fsanitize<span style="color:#f92672">=</span>fuzzer-no-link mytarget.c
+</span></span></code></pre></div><p>And this is exactly our case.</p>
+<p>So these are the steps:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>1. tar zxvf clamav-0.104.2.tar.gz <span style="color:#f92672">&amp;&amp;</span> cd clamav-0.104.2
+</span></span><span style="display:flex;"><span>2. mkdir build <span style="color:#f92672">&amp;&amp;</span> build
+</span></span><span style="display:flex;"><span>3. CC<span style="color:#f92672">=</span>clang CXX<span style="color:#f92672">=</span>clang++ CFLAGS<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;-fsanitize=fuzzer-no-link,address&#34;</span> cmake ../
+</span></span><span style="display:flex;"><span>4. cmake --build .
+</span></span></code></pre></div><p>The important points here are the the choice of the compiler, which has to be of course clang and setting the CFLAGS in order to add to the code the fuzzing instrumentation and ASAN. The fuzzer-no-link specifies that we add the fuzzing instrumentation to the components being compiled, but we will provide the entry point in another application, which will be the fuzzer itself.</p>
+<p>In order to fuzz a function of our choice the entry point of the fuzzer application needs to be declared as the following one:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">LLVMFuzzerTestOneInput</span>(<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">uint8_t</span> <span style="color:#f92672">*</span>Data, <span style="color:#66d9ef">size_t</span> Size) {
+</span></span><span style="display:flex;"><span>  <span style="color:#a6e22e">DoSomethingInterestingWithMyAPI</span>(Data, Size);
+</span></span><span style="display:flex;"><span>  <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;  <span style="color:#75715e">// Non-zero return values are reserved for future use.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>}
+</span></span></code></pre></div><p>Data and Size are the current mutated input derived from the corpus (or in case of a missing corpus it will be generated by libFuzzer itself) and its size in bytes.</p>
+<p>So the question now is: how do we provide such data to libclamav? We choose a target function of the library, which in this case is:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">cl_scanfile</span>(
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>filename,
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">**</span>virname,
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">long</span> <span style="color:#66d9ef">int</span> <span style="color:#f92672">*</span>scanned,
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> cl_engine <span style="color:#f92672">*</span>engine,
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> cl_scan_options <span style="color:#f92672">*</span>options);
+</span></span></code></pre></div><p>This function receives a filename to be scanned, a pointer to virname where the virus name will be stored in case the supplied file has been identified as a malicious one, the scanned data size til now (actually optional parameter, it can be NULL), the engine which is the AV engine struct and options which is a struct containing a series of options that control the behavior of the engine.</p>
+<p>Lets first write a function which initializes the engine and returns a pointer to it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">static</span> <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>byteCodePath <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;/var/lib/clamav/bytecode.cvd&#34;</span>;
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">struct</span> cl_engine <span style="color:#f92672">*</span><span style="color:#a6e22e">init_clam</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span> signo;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">cl_error_t</span> status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_init</span>(CL_INIT_DEFAULT);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_init error: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> cl_engine <span style="color:#f92672">*</span>engine <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_engine_new</span>();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (engine <span style="color:#f92672">==</span> NULL) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_engine_new error</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_load</span>(byteCodePath, engine, <span style="color:#f92672">&amp;</span>signo, CL_DB_BYTECODE);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_load error: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">goto</span> cleanup_engine_with_error;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_engine_compile</span>(engine);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_engine_compile: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">goto</span> cleanup_engine_with_error;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> engine;
+</span></span><span style="display:flex;"><span>cleanup_engine_with_error:
+</span></span><span style="display:flex;"><span>    status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_engine_free</span>(engine);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_engine_free: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>We call cl_init() to initialize the library, the we cl_engine_new() in order to get a new engine then cl_load() to load bytecode based signatures. Notice here that I’ve used specifically this kind of signature since it is small and quick to be loaded. We do so in order to speed up the fuzzer initialization process, if you use huge signatures database it will take time for the fuzzer to load and execute each time (for example if you’re going to fuzz clamscan binary with AFL++ or hongfuzz you will likely experience timeouts). We then finalize the process calling cl_engine_compile(). In case of errors we just return NULL and free the engine.</p>
+<p>Our target function cl_scanfile() accepts a filename, while libFuzzer provides us with pointer to a series of bytes. So in order to provide this input to cl_scanfile() we need to first drop the content into a file and then invoke it passing the filename. So we write an utility function, which accepts a pointer to the data and its size and writes the content into a file which name suffix is “randomized”.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">static</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">create_fuzz_file</span>(<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">uint8_t</span> <span style="color:#f92672">*</span>data, <span style="color:#66d9ef">size_t</span> size) {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">char</span> path[] <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;/tmp/fuzz-XXXXXX&#34;</span>;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">int</span> fd <span style="color:#f92672">=</span> <span style="color:#a6e22e">mkstemp</span>(path);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (fd <span style="color:#f92672">==</span> <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">int</span> status <span style="color:#f92672">=</span> <span style="color:#a6e22e">write</span>(fd, data, size);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">==</span> <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">close</span>(fd);
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">unlink</span>(path);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">close</span>(fd);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>f <span style="color:#f92672">=</span> <span style="color:#a6e22e">strndup</span>(path, <span style="color:#a6e22e">strlen</span>(path));
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (f <span style="color:#f92672">==</span> NULL) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">unlink</span>(path);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> NULL;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> f;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The function is very simple, it creates a temporary file name with the /tmp/fuzz-XXXXXX template passed to mkstemp, writes the data in and returns a copy of its name allocated on the heap, so we’ve to remember to free it at some point.</p>
+<p>Now last piece of the, the fuzzer entry point function:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-C" data-lang="C"><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">LLVMFuzzerTestOneInput</span>(<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">uint8_t</span> <span style="color:#f92672">*</span>data, <span style="color:#66d9ef">size_t</span> size) {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> cl_engine <span style="color:#f92672">*</span>engine <span style="color:#f92672">=</span> <span style="color:#a6e22e">init_clam</span>();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (engine <span style="color:#f92672">==</span> NULL) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;error while initializing clam</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>     
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>fname <span style="color:#f92672">=</span> <span style="color:#a6e22e">create_fuzz_file</span>(data, size);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (fname <span style="color:#f92672">==</span> NULL) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;failed to create fuzz file</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">goto</span> cleanup_engine;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>virname;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> cl_scan_options options;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    options.parse <span style="color:#f92672">=</span> CL_SCAN_PARSE_ELF <span style="color:#f92672">|</span> CL_SCAN_PARSE_ARCHIVE <span style="color:#f92672">|</span>
+</span></span><span style="display:flex;"><span>        CL_SCAN_PARSE_HTML <span style="color:#f92672">|</span> CL_SCAN_PARSE_HWP3 <span style="color:#f92672">|</span> CL_SCAN_PARSE_MAIL <span style="color:#f92672">|</span>
+</span></span><span style="display:flex;"><span>        CL_SCAN_PARSE_OLE2 <span style="color:#f92672">|</span> CL_SCAN_PARSE_PDF <span style="color:#f92672">|</span> CL_SCAN_PARSE_PE <span style="color:#f92672">|</span>
+</span></span><span style="display:flex;"><span>        CL_SCAN_PARSE_SWF <span style="color:#f92672">|</span> CL_SCAN_PARSE_XMLDOCS <span style="color:#f92672">|</span> CL_SCAN_MAIL_PARTIAL_MESSAGE;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    options.general <span style="color:#f92672">=</span> CL_SCAN_GENERAL_ALLMATCHES <span style="color:#f92672">|</span> CL_SCAN_GENERAL_HEURISTICS;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    options.heuristic <span style="color:#f92672">=</span> CL_SCAN_HEURISTIC_BROKEN <span style="color:#f92672">|</span> CL_SCAN_HEURISTIC_MACROS <span style="color:#f92672">|</span>
+</span></span><span style="display:flex;"><span>        CL_SCAN_HEURISTIC_STRUCTURED;
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">cl_error_t</span> status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_scanfile</span>(fname, <span style="color:#f92672">&amp;</span>virname, NULL, engine, <span style="color:#f92672">&amp;</span>options);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">==</span> CL_VIRUS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">//fprintf(stdout, &#34;detected virus: %s\n&#34;, virname);
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    } <span style="color:#66d9ef">else</span> <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_CLEAN) {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">//fprintf(stderr, &#34;cl_scanfile error: %s\n&#34;, cl_strerror(status));
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>        <span style="color:#66d9ef">goto</span> cleanup_file;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>cleanup_file:
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">unlink</span>(fname);
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">free</span>(fname);
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>cleanup_engine:
+</span></span><span style="display:flex;"><span>    status <span style="color:#f92672">=</span> <span style="color:#a6e22e">cl_engine_free</span>(engine);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (status <span style="color:#f92672">!=</span> CL_SUCCESS) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">fprintf</span>(stderr, <span style="color:#e6db74">&#34;cl_engine_free: %s</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, <span style="color:#a6e22e">cl_strerror</span>(status));
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Here the steps performed by this function:</p>
+<ul>
+<li>Call our init_clam() function and get a pointer to a new engine instance</li>
+<li>Call create_fuzz_file() and get a pointer to the filename</li>
+<li>Create a struct cl_options and initialize it with various file formats the engine has to scan, then we specify CL_SCAN_GENERAL_ALLMATCHES, which tells the scan function to continue to scan the file after it finds a first match and CL_SCAN_GENERAL_HEURISTICS which enables heuristics alerts to be shown (you can disable it if you want). Then we enable some heuristics and that’s it</li>
+<li>We finally invoke the cl_scanfile() and at the end of the function we just cleanup freeing the engine and removing the fuzzed file</li>
+<li>Before we build the fuzzer we need another step, to just make our life a little bit easier. We copy the instrumented shared libraries that have been built before in our current fuzzer directory:</li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>find clamav-0.104.2/build -name <span style="color:#e6db74">&#34;*.so.*&#34;</span> -exec cp <span style="color:#f92672">{}</span> . <span style="color:#ae81ff">\;</span>
+</span></span></code></pre></div><p>Now we just build our fuzzer:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>clang -o fuzz_libclamav fuzz_libclamav.c libclamav.so.9.1.0 libclammspack.so.0.8.0 -fsanitize<span style="color:#f92672">=</span>fuzzer,address -I ./clamav-0.104.2/libclamav/ -I ./clamav-0.104.2/build/
+</span></span></code></pre></div><p>Now we need to have some corpus in order to aid the fuzzer with its job, for example we can create a CORPUS directory and put inside an ELF binary like echo or whatever we like. Or can try with archives, PDF and any other file type supported by ClamAV.</p>
+<p>OK! Finally we can run our fuzzer (we need to use LD_LIBRARY_PATH to instruct the dynamic linker at runtime that necessary libraries have to be searched into our current fuzzer directory):</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>LD_LIBRARY_PATH<span style="color:#f92672">=(</span>pwd<span style="color:#f92672">)</span> ./fuzz_libclamav CORPUS/
+</span></span><span style="display:flex;"><span>Fuzzing session starting up
+</span></span></code></pre></div><p><img src="/libfuzzer.webp" alt="libfuzzer"></p>
+<p>If we hit CTRL-C and interrupt the execution we can always restart it later just rerunning the command above.</p>
+<p>Don’t forget to check the libFuzzer documentation in order to dig deep into its details since we just scratched the surface.</p>
+
+      </div>
+    </article>
+
+    <hr />
+
+    <div class="post-info">
+      
+    <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-tag meta-icon"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7" y2="7"></line></svg>
+
+        <span class="tag"><a href="https://example.org/tags/fuzzing/">fuzzing</a></span>
+        <span class="tag"><a href="https://example.org/tags/libfuzzer/">libfuzzer</a></span>
+        <span class="tag"><a href="https://example.org/tags/clamav/">clamav</a></span>
+        <span class="tag"><a href="https://example.org/tags/low-level/">low-level</a></span>
+        <span class="tag"><a href="https://example.org/tags/linux/">linux</a></span>
+        
+    </p>
+
+      
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file-text">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        1336 Words
+      </p>
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-calendar">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        
+          2022-02-17 13:55
+        
+
+         
+          
+        
+      </p>
+    </div>
+
+    
+    <div class="pagination">
+        
+
+        <div class="pagination__buttons">
+            
+            <span class="button previous">
+                <a href="https://example.org/posts/09-books-2022/">
+                    <span class="button__icon">←</span>
+                    <span class="button__text">Books list 2022</span>
+                </a>
+            </span>
+            
+
+            
+            <span class="button next">
+                <a href="https://example.org/posts/03-linux-kernel-debug/">
+                    <span class="button__text">Quick Linux Kernel debug with QEMU, GDB and U-ROOT</span>
+                    <span class="button__icon">→</span>
+                </a>
+            </span>
+            
+        </div>
+    </div>
+
+
+    
+
+    
+
+    
+
+  </main>
+
+            </div>
+
+            
+                <footer class="footer">
+    
+    
+</footer>
+
+            
+        </div>
+
+        
+
+
+
+<script type="text/javascript" src="/bundle.min.85fad2de4f13fec3bcb3b3cb10430cdb44a7b4a9749b32938241a5c6e77718df7624f1002b880521fdc26e24ec1077fda214bf1cb36ee3045510760d09638cae.js" integrity="sha512-hfrS3k8T/sO8s7PLEEMM20SntKl0mzKTgkGlxud3GN92JPEAK4gFIf3CbiTsEHf9ohS/HLNu4wRVEHYNCWOMrg=="></script>
+
+
+
+
+    </body>
+</html>

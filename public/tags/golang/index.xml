@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Golang on 0xcf9</title>
+    <link>https://example.org/tags/golang/</link>
+    <description>Recent content in Golang on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Wed, 19 Jan 2022 17:11:33 +0200</lastBuildDate>
+    <atom:link href="https://example.org/tags/golang/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>DLL Injection using Go</title>
+      <link>https://example.org/posts/04-go-dll-inject/</link>
+      <pubDate>Wed, 19 Jan 2022 17:11:33 +0200</pubDate>
+      <guid>https://example.org/posts/04-go-dll-inject/</guid>
+      <description>DLL injection is the act of loading a library into a running process. Purposes can be multiple ones, like hijacking or instrumenting code, extending or adding functionalities of a software without recompiling it or malicious intents like hiding malware components.&#xA;In the first part of the post we will deal with the injection itself, while in the second one we’ll build a DLL in Go emphasizing some of the limitations and try to overcome them.</description>
+    </item>
+    <item>
+      <title>Nastry Tricks with Go Generate</title>
+      <link>https://example.org/posts/06-nastry-tricks-go-generate/</link>
+      <pubDate>Wed, 24 Nov 2021 17:29:14 +0200</pubDate>
+      <guid>https://example.org/posts/06-nastry-tricks-go-generate/</guid>
+      <description>Nasty tricks with go generate novembre 24th, 2021&#xA;What follows here is just a general idea of how and individual with malicious intent can theoretically attack a CI system or a build machine using the go generate tool.&#xA;The idea is very simple, first the attacker should embed a go generate directive into its application, then at build time (using make or cmake or whatever it’s used to run the build) should run the go generate command.</description>
+    </item>
+    <item>
+      <title>Embed and execute from memory with Golang</title>
+      <link>https://example.org/posts/01-go-embed/</link>
+      <pubDate>Tue, 22 Jun 2021 14:33:57 +0200</pubDate>
+      <guid>https://example.org/posts/01-go-embed/</guid>
+      <description>In this post I’ll show how to embed a file into a Golang binary and then how this file will be loaded and executed from memory on Linux with the aid of memfd_create(2) and execveat(2).&#xA;Since version 1.16 Golang introduced a nice feature which allows embedding a file or a hierarchy of files into a binary. The embedded content can then be accessed as a string, []byte slice or embed.FS object.</description>
+    </item>
+  </channel>
+</rss>

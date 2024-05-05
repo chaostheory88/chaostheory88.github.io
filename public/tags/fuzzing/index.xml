@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Fuzzing on 0xcf9</title>
+    <link>https://example.org/tags/fuzzing/</link>
+    <description>Recent content in Fuzzing on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Thu, 17 Feb 2022 14:55:03 +0200</lastBuildDate>
+    <atom:link href="https://example.org/tags/fuzzing/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Build a simple fuzzer with libFuzzer</title>
+      <link>https://example.org/posts/02-libfuzzer/</link>
+      <pubDate>Thu, 17 Feb 2022 14:55:03 +0200</pubDate>
+      <guid>https://example.org/posts/02-libfuzzer/</guid>
+      <description>libFuzzer is coverage-guided, evolutionary fuzzing engine. And it’s a wonderful tool to help with bug hunting.&#xA;To quote the libFuzzer page:&#xA;LibFuzzer is linked with the library under test, and feeds fuzzed inputs to the library via a specific fuzzing entrypoint (aka “target function”); the fuzzer then tracks which areas of the code are reached, and generates mutations on the corpus of input data in order to maximize the code coverage.</description>
+    </item>
+  </channel>
+</rss>

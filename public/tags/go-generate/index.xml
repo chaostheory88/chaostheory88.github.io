@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Go-Generate on 0xcf9</title>
+    <link>https://example.org/tags/go-generate/</link>
+    <description>Recent content in Go-Generate on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Wed, 24 Nov 2021 17:29:14 +0200</lastBuildDate>
+    <atom:link href="https://example.org/tags/go-generate/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Nastry Tricks with Go Generate</title>
+      <link>https://example.org/posts/06-nastry-tricks-go-generate/</link>
+      <pubDate>Wed, 24 Nov 2021 17:29:14 +0200</pubDate>
+      <guid>https://example.org/posts/06-nastry-tricks-go-generate/</guid>
+      <description>Nasty tricks with go generate novembre 24th, 2021&#xA;What follows here is just a general idea of how and individual with malicious intent can theoretically attack a CI system or a build machine using the go generate tool.&#xA;The idea is very simple, first the attacker should embed a go generate directive into its application, then at build time (using make or cmake or whatever it’s used to run the build) should run the go generate command.</description>
+    </item>
+  </channel>
+</rss>

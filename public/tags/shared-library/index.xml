@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Shared-Library on 0xcf9</title>
+    <link>https://example.org/tags/shared-library/</link>
+    <description>Recent content in Shared-Library on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Mon, 30 Jan 2017 17:22:16 +0200</lastBuildDate>
+    <atom:link href="https://example.org/tags/shared-library/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Having fun and really no profit with $ORIGIN expansion variable in Java</title>
+      <link>https://example.org/posts/05-elf-origin-expansion/</link>
+      <pubDate>Mon, 30 Jan 2017 17:22:16 +0200</pubDate>
+      <guid>https://example.org/posts/05-elf-origin-expansion/</guid>
+      <description>Having fun and really no profit with $ORIGIN expansion variable in Java gennaio 30th, 2017&#xA;Days ago I was reading this [0] interesting article about the dynamic linker expansion variables, and so I tought it would be fun to search for binaries with the RPATH dynamic tag containing the $ORIGIN variable.&#xA;So digging through dynamic tags using eu-readelf -d I found that the java ELF binary has the following RPATH:</description>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="author" content="">
+<meta name="description" content="When I want to harness with the Kernel, e.g., to play with some module I wrote, or just maybe learning something new about its internals I usually relay on some quick tricks to bring up a small environment to play with.
+The first thing is I do is reusing the host kernel of my favorite distro: Fedora (unless some upstream feature I want to play with is not there and in that case I grab directly the sources from kernel." />
+<meta name="keywords" content=", linux, kernel, qemu, gdb, u-root, debugging" />
+<meta name="robots" content="noodp" />
+<meta name="theme-color" content="" />
+<link rel="canonical" href="https://example.org/posts/03-linux-kernel-debug/" />
+
+
+    <title>
+        
+            Quick Linux Kernel debug with QEMU, GDB and U-ROOT :: 0xcf9 
+        
+    </title>
+
+
+
+
+
+<link rel="stylesheet" href="/main.949191c1dcc9c4a887997048b240354e47152016d821198f89448496ba42e491.css" integrity="sha256-lJGRwdzJxKiHmXBIskA1TkcVIBbYIRmPiUSElrpC5JE=">
+
+
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="">
+
+
+
+  <meta itemprop="name" content="Quick Linux Kernel debug with QEMU, GDB and U-ROOT">
+  <meta itemprop="description" content="When I want to harness with the Kernel, e.g., to play with some module I wrote, or just maybe learning something new about its internals I usually relay on some quick tricks to bring up a small environment to play with.
+The first thing is I do is reusing the host kernel of my favorite distro: Fedora (unless some upstream feature I want to play with is not there and in that case I grab directly the sources from kernel.">
+  <meta itemprop="datePublished" content="2022-02-14T17:07:01+02:00">
+  <meta itemprop="dateModified" content="2022-02-14T17:07:01+02:00">
+  <meta itemprop="wordCount" content="324">
+  <meta itemprop="keywords" content="Linux,Kernel,Qemu,Gdb,U-Root,Debugging">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Quick Linux Kernel debug with QEMU, GDB and U-ROOT">
+<meta name="twitter:description" content="When I want to harness with the Kernel, e.g., to play with some module I wrote, or just maybe learning something new about its internals I usually relay on some quick tricks to bring up a small environment to play with.
+The first thing is I do is reusing the host kernel of my favorite distro: Fedora (unless some upstream feature I want to play with is not there and in that case I grab directly the sources from kernel.">
+
+
+
+
+
+
+
+    <meta property="article:published_time" content="2022-02-14 17:07:01 &#43;0200 &#43;0200" />
+
+
+
+
+
+
+
+
+
+
+
+    </head>
+
+    
+        <body>
+    
+    
+        <div class="container">
+            <header class="header">
+    <span class="header__inner">
+        <a href="/" style="text-decoration: none;">
+    <div class="logo">
+        
+            <span class="logo__mark">></span>
+            <span class="logo__text ">
+                hello</span>
+            <span class="logo__cursor" style=
+                  "
+                   
+                   ">
+            </span>
+        
+    </div>
+</a>
+
+
+        <span class="header__right">
+            
+                <nav class="menu">
+    <ul class="menu__inner"><li><a href="/about/">About</a></li><li><a href="/posts/">Posts</a></li><li><a href="/tags/">Tags</a></li>
+    </ul>
+</nav>
+
+                <span class="menu-trigger">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                    </svg>
+                </span>
+            
+        </span>
+    </span>
+</header>
+
+
+            <div class="content">
+                
+  <main class="post">
+
+    <div class="post-info">
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-clock">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        2 minutes
+
+        
+      </p>
+    </div>
+
+    <article>
+      <h1 class="post-title">
+        <a href="https://example.org/posts/03-linux-kernel-debug/">Quick Linux Kernel debug with QEMU, GDB and U-ROOT</a>
+      </h1>
+
+      
+
+      
+
+      
+
+      <div class="post-content">
+        <p>When I want to harness with the Kernel, e.g., to play with some module I wrote, or just maybe learning something new about its internals I usually relay on some quick tricks to bring up a small environment to play with.</p>
+<p>The first thing is I do is reusing the host kernel of my favorite distro: Fedora (unless some upstream feature I want to play with is not there and in that case I grab directly the sources from kernel.org building a custom one).</p>
+<p>Second in order to have a minimal userspace I use U-ROOT to quickly build an initramfs.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>GO111MODULE<span style="color:#f92672">=</span>off ~/go/bin/u-root -build<span style="color:#f92672">=</span>gbb -o initramfs
+</span></span></code></pre></div><p>Third in order to get support for debugging symbols I get the kernel-debuginfo package matching the host kernel, so I have both vmlinux and modules completely unstripped.</p>
+<p>In order to run in QEMU:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>qemu-system-x86_64 -kernel /boot/vmlinuz-5.16.8-200.fc35.x86_64 -enable-kvm -smp <span style="color:#ae81ff">2</span> -m 2048M -s -S -initrd initramfs -append <span style="color:#e6db74">&#34;nokaslr&#34;</span>
+</span></span></code></pre></div><p>The above command will run QEMU with the specified kernel and provides it an initramfs. The <code>-s -S</code> switch will tell QEMU to freeze on startup and start waiting for a GDB connection on port 1234. Also do not forget to append <code>nokaslr</code> to the kernel cmdline otherwise GDB later will not be able to solve symbols addresses.</p>
+<p>Then we can open another shell and connect to QEMU using GDB in order to start a debugging session:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>gdb -q /usr/lib/debug/lib/modules/5.16.8-200.fc35.x86_64/vmlinux
+</span></span><span style="display:flex;"><span>pwndbg&gt; set architecture i386:x86-64
+</span></span><span style="display:flex;"><span>The target architecture is set to <span style="color:#e6db74">&#34;i386:x86-64&#34;</span>.
+</span></span><span style="display:flex;"><span>pwndbg&gt; target remote :1234
+</span></span><span style="display:flex;"><span>Remote debugging using :1234
+</span></span><span style="display:flex;"><span>pwndbg&gt; hbreak start_kernel
+</span></span><span style="display:flex;"><span>Hardware assisted breakpoint <span style="color:#ae81ff">1</span> at 0xffffffff836c1e57: file init/main.c, line 925.
+</span></span><span style="display:flex;"><span>pwndbg&gt; c
+</span></span><span style="display:flex;"><span>Continuing.
+</span></span></code></pre></div><p><img src="/kernel_debugging.webp" alt="gdb"></p>
+<p>In the preceeding commands we first open GDB and provide the unstripped vmlinux image that comes with kernel-debuginfo package, then we set the target architecture for the running kernel, and finally put an hardware breakpoint on start_kernel function. Then we issue continue command and as soon as the breakpoint will be accessed execution will break. That’s it.</p>
+
+      </div>
+    </article>
+
+    <hr />
+
+    <div class="post-info">
+      
+    <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-tag meta-icon"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7" y2="7"></line></svg>
+
+        <span class="tag"><a href="https://example.org/tags/linux/">linux</a></span>
+        <span class="tag"><a href="https://example.org/tags/kernel/">kernel</a></span>
+        <span class="tag"><a href="https://example.org/tags/qemu/">qemu</a></span>
+        <span class="tag"><a href="https://example.org/tags/gdb/">gdb</a></span>
+        <span class="tag"><a href="https://example.org/tags/u-root/">u-root</a></span>
+        <span class="tag"><a href="https://example.org/tags/debugging/">debugging</a></span>
+        
+    </p>
+
+      
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file-text">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        324 Words
+      </p>
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-calendar">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        
+          2022-02-14 16:07
+        
+
+         
+          
+        
+      </p>
+    </div>
+
+    
+    <div class="pagination">
+        
+
+        <div class="pagination__buttons">
+            
+            <span class="button previous">
+                <a href="https://example.org/posts/02-libfuzzer/">
+                    <span class="button__icon">←</span>
+                    <span class="button__text">Build a simple fuzzer with libFuzzer</span>
+                </a>
+            </span>
+            
+
+            
+            <span class="button next">
+                <a href="https://example.org/posts/04-go-dll-inject/">
+                    <span class="button__text">DLL Injection using Go</span>
+                    <span class="button__icon">→</span>
+                </a>
+            </span>
+            
+        </div>
+    </div>
+
+
+    
+
+    
+
+    
+
+  </main>
+
+            </div>
+
+            
+                <footer class="footer">
+    
+    
+</footer>
+
+            
+        </div>
+
+        
+
+
+
+<script type="text/javascript" src="/bundle.min.85fad2de4f13fec3bcb3b3cb10430cdb44a7b4a9749b32938241a5c6e77718df7624f1002b880521fdc26e24ec1077fda214bf1cb36ee3045510760d09638cae.js" integrity="sha512-hfrS3k8T/sO8s7PLEEMM20SntKl0mzKTgkGlxud3GN92JPEAK4gFIf3CbiTsEHf9ohS/HLNu4wRVEHYNCWOMrg=="></script>
+
+
+
+
+    </body>
+</html>
