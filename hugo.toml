@@ -7,10 +7,6 @@ showAllPostsArchive = true
 
 [menus]
     [[menus.main]]
-    identifier = "about"
-    name = "About"
-    url = "/about/"
-    [[menus.main]]
     identifier = "posts"
     name = "Posts"
     url = "/posts/"
