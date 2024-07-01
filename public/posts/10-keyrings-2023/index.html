@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="author" content="">
+<meta name="description" content="This is the third part of the series on securing applications on Linux. The first part was about Linux Seccompand the second part was about Linux Landlock. This third part is about Linux Keyrings.
+What are Linux Keyrings? As usual we start citing the appropriate man page, keyrings(7):
+The Linux key-management facility is primarily a way for various kernel components to retain or cache security data, authentication keys, encryption keys, and other data in the kernel System call interfaces are provided so that user-space programs can manage those objects and also use the facility for their own purposes; see add_key(2), request_key(2), and keyctl(2)." />
+<meta name="keywords" content=", linux, security, applications, keyrings" />
+<meta name="robots" content="noodp" />
+<meta name="theme-color" content="" />
+<link rel="canonical" href="https://example.org/posts/10-keyrings-2023/" />
+
+
+    <title>
+        
+            Intro to Keyrings :: 0xcf9 
+        
+    </title>
+
+
+
+
+
+<link rel="stylesheet" href="/main.949191c1dcc9c4a887997048b240354e47152016d821198f89448496ba42e491.css" integrity="sha256-lJGRwdzJxKiHmXBIskA1TkcVIBbYIRmPiUSElrpC5JE=">
+
+
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="">
+
+
+
+  <meta itemprop="name" content="Intro to Keyrings">
+  <meta itemprop="description" content="This is the third part of the series on securing applications on Linux. The first part was about Linux Seccompand the second part was about Linux Landlock. This third part is about Linux Keyrings.
+What are Linux Keyrings? As usual we start citing the appropriate man page, keyrings(7):
+The Linux key-management facility is primarily a way for various kernel components to retain or cache security data, authentication keys, encryption keys, and other data in the kernel System call interfaces are provided so that user-space programs can manage those objects and also use the facility for their own purposes; see add_key(2), request_key(2), and keyctl(2).">
+  <meta itemprop="datePublished" content="2023-10-12T00:00:00+00:00">
+  <meta itemprop="dateModified" content="2023-10-12T00:00:00+00:00">
+  <meta itemprop="wordCount" content="3311">
+  <meta itemprop="keywords" content="Linux,Security,Applications,Keyrings">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Intro to Keyrings">
+<meta name="twitter:description" content="This is the third part of the series on securing applications on Linux. The first part was about Linux Seccompand the second part was about Linux Landlock. This third part is about Linux Keyrings.
+What are Linux Keyrings? As usual we start citing the appropriate man page, keyrings(7):
+The Linux key-management facility is primarily a way for various kernel components to retain or cache security data, authentication keys, encryption keys, and other data in the kernel System call interfaces are provided so that user-space programs can manage those objects and also use the facility for their own purposes; see add_key(2), request_key(2), and keyctl(2).">
+
+
+
+
+
+    <meta property="article:section" content="security" />
+
+    <meta property="article:section" content="linux" />
+
+    <meta property="article:section" content="keyrings" />
+
+
+
+    <meta property="article:published_time" content="2023-10-12 00:00:00 &#43;0000 UTC" />
+
+
+
+
+
+
+
+
+
+
+
+    </head>
+
+    
+        <body>
+    
+    
+        <div class="container">
+            <header class="header">
+    <span class="header__inner">
+        <a href="/" style="text-decoration: none;">
+    <div class="logo">
+        
+            <span class="logo__mark">></span>
+            <span class="logo__text ">
+                hello</span>
+            <span class="logo__cursor" style=
+                  "
+                   
+                   ">
+            </span>
+        
+    </div>
+</a>
+
+
+        <span class="header__right">
+            
+                <nav class="menu">
+    <ul class="menu__inner"><li><a href="/posts/">Posts</a></li><li><a href="/tags/">Tags</a></li>
+    </ul>
+</nav>
+
+                <span class="menu-trigger">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                    </svg>
+                </span>
+            
+        </span>
+    </span>
+</header>
+
+
+            <div class="content">
+                
+  <main class="post">
+
+    <div class="post-info">
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-clock">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        16 minutes
+
+        
+      </p>
+    </div>
+
+    <article>
+      <h1 class="post-title">
+        <a href="https://example.org/posts/10-keyrings-2023/">Intro to Keyrings</a>
+      </h1>
+
+      
+
+      
+
+      
+
+      <div class="post-content">
+        <p>This is the third part of the series on securing applications on Linux. The first part was about Linux Seccompand the second part was about Linux Landlock. This third part is about Linux Keyrings.</p>
+<h2 id="what-are-linux-keyrings">What are Linux Keyrings?</h2>
+<p>As usual we start citing the appropriate man page, <a href="https://man7.org/linux/man-pages/man7/keyrings.7.html">keyrings(7)</a>:</p>
+<pre tabindex="0"><code>The Linux key-management facility is primarily a way for various
+kernel components to retain or cache security data,
+authentication keys, encryption keys, and other data in the
+kernel
+System call interfaces are provided so that user-space programs
+can manage those objects and also use the facility for their own
+purposes; see add_key(2), request_key(2), and keyctl(2).
+</code></pre><p>So, this means that we can use the kernel as a vault, storing secrets in it. There are various types of keys we can create:</p>
+<ul>
+<li>
+<p>keyrings – are special keys to which other keys or keyrings can be linked to, they work almost as a directory, their purpose is to keep alive keys so that those keys are not garbage collected by the kernel</p>
+</li>
+<li>
+<p>user – are keys which maximum size is 32,767 bytes, they are used to store user specific data and are managed by user
+space applications</p>
+</li>
+<li>
+<p>logon – similar to user keys except that cannot be read from user space, those are useful to store credentials such as user and password</p>
+</li>
+<li>
+<p>big_key – similar to user except that they can be up to 1MiB in size, these kind of keys could may be stored on tmpfs</p>
+</li>
+</ul>
+<p>We mentioned before that if a key is not anchored to a keyring it will be garbage collected by the kernel, so the kernel offers a way to keep keys alive, this is done by linking keys to a keyring. Notice that keyrings themselves can be garbage collected, so in turn also keyrings need to be anchored to another keyring. To solve this problem the kernel makes available some keyrings which sole purpose is to be used as anchors, these keyrings are:</p>
+<ul>
+<li>
+<p>Process keyrings – we’ll look at them in a moment, since are the ones we’ll use in this article</p>
+<ul>
+<li>process-keyring(7)</li>
+<li>thread-keyring(7)</li>
+<li>session-keyring(7)</li>
+</ul>
+</li>
+<li>
+<p>User keyrings – these are per UID keyrings and are shared with all the processes spawned by the same UID</p>
+<ul>
+<li>user-keyring(7)</li>
+<li>user-session-keyring(7)</li>
+</ul>
+</li>
+<li>
+<p>Persistence keyrings – these are keyrings which can persist across user sessions, so that programs that need to use    credentials to perform operations can get them without the need of a user session</p>
+<ul>
+<li>persistent-keyring(7)</li>
+</ul>
+</li>
+<li>
+<p>Special keyrings – thes are keyrings that holds system wide keys, such as the ones used for the kernel modules signature verification</p>
+</li>
+</ul>
+<p>Notice that the one above is a short description and the reader is encouraged to check appropriate man pages to have a deeper understanding of the topic.</p>
+<h2 id="process-keyrings">Process Keyrings</h2>
+<p>These keyrings exist as anchoring keyring in order to be used by processes and threads. Their existence is directly bound to the process existence, so as long as the process is alive it will be possible to access the keyring. There are three types of process keyrings:</p>
+<ul>
+<li>
+<p>process-keyring(7) – it is created when a process accesses it for the first time, and it is accessible by all the threads of the process, notice however that on execve(2) the keyring it is destroyed, and this makes perfectly sense as this syscall replaces entirely the process memory image</p>
+</li>
+<li>
+<p>thread-keyring(7) – it is created when a thread accesses it for the first time, and it is accessible only by the thread that created it and gets destroyed when the thread terminates</p>
+</li>
+<li>
+<p>session-keyring(7) – it is a process keyring that survives across clone(2), fork(2) and execve(2) syscalls, sessions can be joined by processes or new sessions can be created, usually a session keyring is created when user logs in and destroyed when user logs out</p>
+</li>
+</ul>
+<h2 id="key-permissions">Key permissions</h2>
+<p>Since keys are sensitive information, those must be protected by permissions. Permissions are security attributes attached to keys. Keys as files are owned by a user ID and group ID. Then on top of that there is a bitmask of permissions which detemines what can be done with the key by user ID, group ID and others. The permissions are:</p>
+<ul>
+<li>read – the key can be read</li>
+<li>write – the key can be written</li>
+<li>search – the key can be searched</li>
+<li>link – the key can be linked to a keyring</li>
+<li>setattr – the key attributes like owner, group, permission mask and timeout to be changed</li>
+<li>view – allows to view type description and other parameters</li>
+</ul>
+<p>There’s also another access right called possessor which specifies rights granted if a key is determined to be possessed by the caller. keyctl(1) has a nice table which describes the access rights:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>Possessor UID       GID       Other     Permission Granted
+</span></span><span style="display:flex;"><span><span style="color:#f92672">========</span>  <span style="color:#f92672">========</span>  <span style="color:#f92672">========</span>  <span style="color:#f92672">========</span>  <span style="color:#f92672">==================</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">01000000</span>  <span style="color:#ae81ff">00010000</span>  <span style="color:#ae81ff">00000100</span>  <span style="color:#ae81ff">00000001</span>  View
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">02000000</span>  <span style="color:#ae81ff">00020000</span>  <span style="color:#ae81ff">00000200</span>  <span style="color:#ae81ff">00000002</span>  Read
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">04000000</span>  <span style="color:#ae81ff">00040000</span>  <span style="color:#ae81ff">00000400</span>  <span style="color:#ae81ff">00000004</span>  Write
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">08000000</span>  <span style="color:#ae81ff">00080000</span>  <span style="color:#ae81ff">00000800</span>  <span style="color:#ae81ff">00000008</span>  Search
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">10000000</span>  <span style="color:#ae81ff">00100000</span>  <span style="color:#ae81ff">00001000</span>  <span style="color:#ae81ff">00000010</span>  Link
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">20000000</span>  <span style="color:#ae81ff">00200000</span>  <span style="color:#ae81ff">00002000</span>  <span style="color:#ae81ff">00000020</span>  Set Attribute
+</span></span><span style="display:flex;"><span>3f000000  003f0000  00003f00  0000003f  All
+</span></span></code></pre></div><p>So suppose we want to give all privileges to UID and Possessor, and view + read to the others we would do set its permissions to 0x3f3f0303.</p>
+<p>The kernel exposes key information through the /proc/keys file and other multiple files described into keyrings(7) manpage. Let’s take a look at it</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ cat /proc/keys
+</span></span><span style="display:flex;"><span>05451ea7 I--Q---     <span style="color:#ae81ff">4</span> perm 1f3f0000  <span style="color:#ae81ff">1000</span> <span style="color:#ae81ff">65534</span> keyring   _uid.1000: empty
+</span></span><span style="display:flex;"><span>14f7afae I--Q---     <span style="color:#ae81ff">1</span> perm 1f3f0000  <span style="color:#ae81ff">1000</span> <span style="color:#ae81ff">65534</span> keyring   _uid_ses.1000: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>293d8fc8 I--Q---    <span style="color:#ae81ff">15</span> perm 3f030000  <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span> keyring   _ses: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>3b3232a6 I--Q---   <span style="color:#ae81ff">376</span> perm 3f030000  <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span> keyring   _ses: <span style="color:#ae81ff">1</span>
+</span></span></code></pre></div><p>The first column is the key ID, keys are represented as 32bit integers, in this view are formatted in hexadecimal. The second column shows flags, in this case all the keys are instantiated (I) and contribute to the user quota (Q). The third column tells how many struct cred are pinning that specific key, which approximately is the number of living threads and open files. The fourth column tells when the key will expire (all the keys here are marked as perm which means permanent). The fifth column is the permissions bitmask. The sixth column is the UID of the key owner. The seventh column is the GID of the key owner. The eighth column is the key type. The ninth column is the description of the key.</p>
+<h2 id="how-to-use-linux-keyrings">How to use Linux Keyrings?</h2>
+<p>Linux provides a tool named keyctl which can be used to create/delete/update keys and keyrings. Let’s see how to use it.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># create a new keyring attached to the default session (@s) one, and name it my_keyring</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># notice that @s is created on user login and destroyed on logout, the command returns</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># the key ID of the newly created keyring</span>
+</span></span><span style="display:flex;"><span>$  keyctl newring my_keyring @s
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">740991106</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># show the default session keyring, notice that the keyring we created is attached to it</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># along with the user keyring</span>
+</span></span><span style="display:flex;"><span>$  keyctl show @s
+</span></span><span style="display:flex;"><span>Keyring
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">993145510</span> --alswrv   <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span>  keyring: _ses
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">88415911</span> --alswrv   <span style="color:#ae81ff">1000</span> <span style="color:#ae81ff">65534</span>   <span style="color:#ae81ff">\_</span> keyring: _uid.1000
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">740991106</span> --alswrv   <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span>   <span style="color:#ae81ff">\_</span> keyring: my_keyring
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># add a new key (we generate it randomly with openssl) to the keyring we created,</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># as for the keyring command, this command returns the key ID of the newly created key</span>
+</span></span><span style="display:flex;"><span>$  keyctl add user my_key <span style="color:#f92672">(</span>openssl rand 32<span style="color:#f92672">)</span> <span style="color:#ae81ff">740991106</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">1032028779</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># show the keyring again, notice that the key we created is attached to it</span>
+</span></span><span style="display:flex;"><span>$  keyctl show @s
+</span></span><span style="display:flex;"><span>Keyring
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">993145510</span> --alswrv   <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span>  keyring: _ses
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">88415911</span> --alswrv   <span style="color:#ae81ff">1000</span> <span style="color:#ae81ff">65534</span>   <span style="color:#ae81ff">\_</span> keyring: _uid.1000
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">740991106</span> --alswrv   <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span>   <span style="color:#ae81ff">\_</span> keyring: my_keyring
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">1032028779</span> --alswrv   <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span>       <span style="color:#ae81ff">\_</span> user: my_key
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># show the key we created</span>
+</span></span><span style="display:flex;"><span>$ keyctl read <span style="color:#ae81ff">1032028779</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">32</span> bytes of data in key:
+</span></span><span style="display:flex;"><span>e2362872 8b32fc4f bb6eca6d 4f90be31 4b84a6ed cfd4535a c4d66991 0d2eb2bc
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># we can also pipe data in raw format to other applications</span>
+</span></span><span style="display:flex;"><span>$ keyctl pipe <span style="color:#ae81ff">1032028779</span> | hexyl
+</span></span><span style="display:flex;"><span>┌────────┬─────────────────────────┬─────────────────────────┬────────┬────────┐
+</span></span><span style="display:flex;"><span>│00000000│ e2 <span style="color:#ae81ff">36</span> <span style="color:#ae81ff">28</span> <span style="color:#ae81ff">72</span> 8b <span style="color:#ae81ff">32</span> fc 4f ┊ bb 6e ca 6d 4f <span style="color:#ae81ff">90</span> be <span style="color:#ae81ff">31</span> │×6<span style="color:#f92672">(</span>r×2×O┊×n×mO××1│
+</span></span><span style="display:flex;"><span>│00000010│ 4b <span style="color:#ae81ff">84</span> a6 ed cf d4 <span style="color:#ae81ff">53</span> 5a ┊ c4 d6 <span style="color:#ae81ff">69</span> <span style="color:#ae81ff">91</span> 0d 2e b2 bc │K×××××SZ┊××i×_.××│
+</span></span><span style="display:flex;"><span>└────────┴─────────────────────────┴─────────────────────────┴────────┴────────┘
+</span></span></code></pre></div><p>Before we move on with Go code, we’re going to show another example to compute Diffie-Hellman directly using keyrings feature.</p>
+<p>This is our private key in hex</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>0f6f7590dcee920ca7a1f9dc8ff94e
+</span></span><span style="display:flex;"><span>87e4484b223d1fd57d3ee00a2f4616
+</span></span><span style="display:flex;"><span>a03a0152cafa5289676aed7291c75b
+</span></span><span style="display:flex;"><span>b031b4357a75698129dfbb4ca5e799
+</span></span><span style="display:flex;"><span>a34c545b8fe77fb5926e9184222a08
+</span></span><span style="display:flex;"><span>30f916ac7aef551c5fcd67722595df
+</span></span><span style="display:flex;"><span>aaa6098595a190bd461bee0ee9bbb0
+</span></span><span style="display:flex;"><span>1ea9ef24f3590ec3b036862c787e16
+</span></span><span style="display:flex;"><span>b855bfb05863083b99bd7de0dcae78
+</span></span><span style="display:flex;"><span>9422c87f6f030a02818b1ae63b7f1e
+</span></span><span style="display:flex;"><span>b6c6036de0a6b7f653c000cc1d0c54
+</span></span><span style="display:flex;"><span>7ecb9c5c0da71f5fafe7dd1c88fba7
+</span></span><span style="display:flex;"><span>35266bc0768043ba86fc86e8a41625
+</span></span><span style="display:flex;"><span>55ccc2e6806d882964997ea87533a2
+</span></span><span style="display:flex;"><span>37b0c617cb222c90418ded933e9eee
+</span></span><span style="display:flex;"><span>fa462dd0157471b24612d4c8622650
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">60</span>
+</span></span></code></pre></div><p>This is our prime module</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>fe4e0bd59f860a8eda80ad8663ad1d
+</span></span><span style="display:flex;"><span>3b55e19670a1a43d9e203428ca2794
+</span></span><span style="display:flex;"><span>ba934cb8d6ba2233faf96ef6c6a14a
+</span></span><span style="display:flex;"><span>5267de1d46108cf9341f0e1959bb54
+</span></span><span style="display:flex;"><span>2197d18076b51ceab3a249b2eacf13
+</span></span><span style="display:flex;"><span>2e453c64b4cdd089c295d2eda1200f
+</span></span><span style="display:flex;"><span>9f34627f5b7c3462a94f6e66ba6d5d
+</span></span><span style="display:flex;"><span>5f253d4420343a095ace2d1e10e194
+</span></span><span style="display:flex;"><span>0e291dda82557d89903683799bb4b8
+</span></span><span style="display:flex;"><span>f777a5471cbd1e452f3a8f8bb12347
+</span></span><span style="display:flex;"><span>f1f93e7da6f37f0f2b598c5eea2481
+</span></span><span style="display:flex;"><span>7c5a00197012e8b2c269c294d6de0b
+</span></span><span style="display:flex;"><span>853b25517f6d33e861fae1df79bda9
+</span></span><span style="display:flex;"><span>96785b5fc1527dafdd25a9d369c2d1
+</span></span><span style="display:flex;"><span>3714be41e9ee78080b7f9e5bb7a056
+</span></span><span style="display:flex;"><span>564c14cf5567b8b32eb1caa0579df2
+</span></span><span style="display:flex;"><span>301f
+</span></span></code></pre></div><p>And this is our generator</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#ae81ff">02</span>
+</span></span></code></pre></div><p>So lets say we want to generate our public key doing <code>(generator ^ private_key) mod prime_module</code>, we can do it with the following code. Notice that in this example before loading our parameters and key we need to generate those. This can be achievied with openssl as follows:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>openssl dhparam -check -out dh.pem <span style="color:#ae81ff">2048</span>
+</span></span><span style="display:flex;"><span>openssl genpkey -paramfile dh.pem -text
+</span></span></code></pre></div><p>Then you’ve to adjust a bit the format like removing the ‘:’ between hex bytes and then exporting the values e.g., as environment variables (do not forget to unset once loaded in the keyring, otherwise we’re voiding the purpose of using keyrings). Moreover consider this is just an example using the keyctl commandline tool, we could achieve the same result using APIs.</p>
+<p>Once we’ve our params as env variable we can proceed with the following commands:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># we first load the prime module, the private key and the generator in the keyring</span>
+</span></span><span style="display:flex;"><span>keyctl add user prime $prime @s
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">261425615</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>keyctl add user priv_key $priv_key @s
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">195168655</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>keyctl add user generator $generator @s
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">688070769</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># lets show the keyring</span>
+</span></span><span style="display:flex;"><span>keyctl show @s
+</span></span><span style="display:flex;"><span>Keyring
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">611679097</span> --alswrv   <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span>  keyring: _ses
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">504006137</span> --alswrv   <span style="color:#ae81ff">1000</span> <span style="color:#ae81ff">65534</span>   <span style="color:#ae81ff">\_</span> keyring: _uid.1000
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">688070769</span> --alswrv   <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span>   <span style="color:#ae81ff">\_</span> user: generator
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">195168655</span> --alswrv   <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span>   <span style="color:#ae81ff">\_</span> user: priv_key
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">261425615</span> --alswrv   <span style="color:#ae81ff">1000</span>  <span style="color:#ae81ff">1000</span>   <span style="color:#ae81ff">\_</span> user: prime
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># we then compute the public key doing &#39;keyctl dh_compute &lt;private&gt; &lt;prime&gt; &lt;base&gt;&#39;</span>
+</span></span><span style="display:flex;"><span>keyctl dh_compute <span style="color:#ae81ff">195168655</span> <span style="color:#ae81ff">261425615</span> <span style="color:#ae81ff">688070769</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">520</span> bytes of data in result:
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">00000000</span> 00001b1c 0babf483 2a611efd 3051e63d 03d3f202 c2707669 5fc00072
+</span></span><span style="display:flex;"><span>64bbfbef 40ab3706 b59ac8ae 2402f65f 69a96dd0 a1569c65 13f6b9fc 45f9d810
+</span></span><span style="display:flex;"><span>d0229ba8 fcaed84d bce5a67e 32d0dac5 1e21c838 65f71921 ce6e07e4 72ae49b3
+</span></span><span style="display:flex;"><span>7b26c507 8ec0c502 776946d8 06f2aac7 9cabe6fe bca5edd3 58e861ab 6099a39f
+</span></span><span style="display:flex;"><span>d1c703cd a0b677d3 5fbd1e99 d80ec614 5ea1273d bcd8ce1a 93a0499f 485545a3
+</span></span><span style="display:flex;"><span>eaeb6630 f4d30a3f 22ba90fa b415b6a2 aa4772ca d28f11e1 729625f5 13dde521
+</span></span><span style="display:flex;"><span>af21aaf9 4746d52a 08e65b29 3982e708 4f3ba400 cfc5decb 45c2409f a0c12987
+</span></span><span style="display:flex;"><span>d38d5ac9 8e8cdcad 0777b523 c36e2526 659fbce2 06e385a4 d9379ba4 7343dbca
+</span></span><span style="display:flex;"><span>0df0db4a 4df84609 dc57bb99 16a75023 8596d4b1 26e4a9aa ec3a7187 b0f44ba0
+</span></span><span style="display:flex;"><span>283472cf 9a33c5be 32ee170c c190c649 9805d24c 8071b810 d535cf2b 8937eb43
+</span></span><span style="display:flex;"><span>10456d83 f978d7de ca222f30 74386a86 df76e34f c71328f6 f49e6a0e 36b540f3
+</span></span><span style="display:flex;"><span>35dac266 cbb86490 dfa3cf7a <span style="color:#ae81ff">45889447</span> b7aed36d de1a2ac2 0222bc6f 5a4ec429
+</span></span><span style="display:flex;"><span>04caac37 fbedfc99 913c593c 55908c07 760d5fd2 105d63f1 febfd782 fd62ef9d
+</span></span><span style="display:flex;"><span>c2e1bf99 e2e759cc 5eddbe74 29dd68b7 f37143e7 9a84e4e3 209f8ba1 cbc42e48
+</span></span><span style="display:flex;"><span>e4ecf652 7ce86b21 f3bf6d32 <span style="color:#ae81ff">22843038</span> 2095ae19 4b39679c 33fecad3 f393b057
+</span></span><span style="display:flex;"><span>60457f3d 8e68c024 505d9ae2 edb25a2b 111663a5 905b2d3f 629c749c a64659e0
+</span></span><span style="display:flex;"><span>910d1a7b 6432833c
+</span></span></code></pre></div><h2 id="using-keyrings-in-go">Using Keyrings in Go</h2>
+<p>In the following Go example code, we illustrate how we can use keyring facilities to store an ED25519 private key. The key is then used to sign and verify (with its public counterpart) a payload. We’re going to use the golang/x/unix package to interact with the kernel keyring, as it provides syscalls wrappers, and the crypto/ed25519 package to create/parse keys, sign and verify the payload.</p>
+<p>The Go code, creates an HTTP service which exposes two endpoints:</p>
+<ul>
+<li>/generate → forges a simple JSON payload with some data and its ED25519 base64 encoded signature e.g,:</li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">&#34;payload&#34;</span>:<span style="color:#e6db74">&#34;some_data_1693390750&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">&#34;signature&#34;</span>:<span style="color:#e6db74">&#34;QO1mZet+wpgODp+fs8PbfHvKqYBrX2OGxfxDyT8e+tH7DBVyBUafFNCTCbEiFrhm0urgrON9GkQBdv/0REpIBw==&#34;</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><ul>
+<li>/verify → accepts the above payload computes the payload field signature and compares it with the one in the signature field</li>
+</ul>
+<p>When the service bootstraps it generates a new ED25519 key and stores it in the process keyring, then it sets the permissions on the keyring and on the key so that it can be accessed by other threads in the process. The the endpoints described above make use of some utilities functions to retrieve and use the key to perform sign and verify.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;crypto&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;crypto/ed25519&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;encoding/base64&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;encoding/json&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;fmt&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;log&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;net/http&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;time&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;log/slog&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;golang.org/x/sys/unix&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">const</span> (
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// this is the description of the key we&#39;re going to store in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">keyName</span> = <span style="color:#e6db74">&#34;priv_ed25519_key&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">var</span> (
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// this is our process keyring ID
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// it initialized in main()
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">ringId</span> = <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// ServicePayload is the payload we&#39;re going to use to communicate with the service
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">type</span> <span style="color:#a6e22e">ServicePayload</span> <span style="color:#66d9ef">struct</span> {
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">Signature</span> <span style="color:#66d9ef">string</span> <span style="color:#e6db74">`json:&#34;signature&#34;`</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">Payload</span>   <span style="color:#66d9ef">string</span> <span style="color:#e6db74">`json:&#34;payload&#34;`</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// get id of the process keyring or create a new one if it does not exist
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// check keyctl(2) KEYCTL_GET_KEYRING_ID
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">var</span> <span style="color:#a6e22e">err</span> <span style="color:#66d9ef">error</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">ringId</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">unix</span>.<span style="color:#a6e22e">KeyctlGetKeyringID</span>(<span style="color:#a6e22e">unix</span>.<span style="color:#a6e22e">KEY_SPEC_PROCESS_KEYRING</span>, <span style="color:#66d9ef">true</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// set following permissions to the keyring:
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#75715e">// * possesor all
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// * process with possessor uid view/read/search
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// check keyctl(2) KEYCTL_SETPERM
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">unix</span>.<span style="color:#a6e22e">KeyctlSetperm</span>(<span style="color:#a6e22e">ringId</span>, <span style="color:#ae81ff">0x3f0b0000</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// generate a new key ED25519 key and store it in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">generateAndStorePrivKey</span>(<span style="color:#a6e22e">ringId</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// start our HTTP service
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">startService</span>()
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// retrievePrivKeyID retrieves the key ID of the private key stored in the keyring `ring`
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">retrievePrivKeyID</span>(<span style="color:#a6e22e">ring</span> <span style="color:#66d9ef">int</span>) (<span style="color:#66d9ef">int</span>, <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">unix</span>.<span style="color:#a6e22e">KeyctlSearch</span>(<span style="color:#a6e22e">ring</span>, <span style="color:#e6db74">&#34;user&#34;</span>, <span style="color:#a6e22e">keyName</span>, <span style="color:#ae81ff">0</span>)
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// generateAndStorePrivKey generates a new ED25519 key and stores it in the keyring `ring`
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">generateAndStorePrivKey</span>(<span style="color:#a6e22e">ring</span> <span style="color:#66d9ef">int</span>) (<span style="color:#66d9ef">int</span>, <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// first generate a new ed25519 key
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">priv</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ed25519</span>.<span style="color:#a6e22e">GenerateKey</span>(<span style="color:#66d9ef">nil</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// get the seed key and store it in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// we&#39;ll use it later when needed to generate the ed25519 key
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// from it and sign the payload
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">seed</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">priv</span>.<span style="color:#a6e22e">Seed</span>()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// store the seed in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// check add_key(2)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">id</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">unix</span>.<span style="color:#a6e22e">AddKey</span>(<span style="color:#e6db74">&#34;user&#34;</span>, <span style="color:#a6e22e">keyName</span>, <span style="color:#a6e22e">seed</span>, <span style="color:#a6e22e">ring</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// set the permissions of the key, same as the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">unix</span>.<span style="color:#a6e22e">KeyctlSetperm</span>(<span style="color:#a6e22e">id</span>, <span style="color:#ae81ff">0x3f0b0000</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> <span style="color:#f92672">-</span><span style="color:#ae81ff">1</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">id</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// getKeyPayload retrieves the key payload from the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">getKeyPayload</span>(<span style="color:#a6e22e">keyID</span> <span style="color:#66d9ef">int</span>) ([]<span style="color:#66d9ef">byte</span>, <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// create a buffer with the appropriate size
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// of the key seed
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">buf</span> <span style="color:#f92672">:=</span> make([]<span style="color:#66d9ef">byte</span>, <span style="color:#a6e22e">ed25519</span>.<span style="color:#a6e22e">SeedSize</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// then read the key payload, which is the seed, this wrapper provides a way
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// to store the key in the buffer
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// check keyctl(2) KEYCTL_READ
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">unix</span>.<span style="color:#a6e22e">KeyctlBuffer</span>(<span style="color:#a6e22e">unix</span>.<span style="color:#a6e22e">KEYCTL_READ</span>, <span style="color:#a6e22e">keyID</span>, <span style="color:#a6e22e">buf</span>, <span style="color:#a6e22e">ed25519</span>.<span style="color:#a6e22e">SeedSize</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">buf</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// signPayload signs the data with the key stored in the keyring and returns the signature
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">signPayload</span>(<span style="color:#a6e22e">data</span> []<span style="color:#66d9ef">byte</span>, <span style="color:#a6e22e">ring</span> <span style="color:#66d9ef">int</span>) ([]<span style="color:#66d9ef">byte</span>, <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// retrieve the key ID of the private key stored in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">keyID</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">retrievePrivKeyID</span>(<span style="color:#a6e22e">ring</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// retrieve the key payload from the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">keySeed</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">getKeyPayload</span>(<span style="color:#a6e22e">keyID</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// setup the signer options
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">opts</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">crypto</span>.<span style="color:#a6e22e">SignerOpts</span>(<span style="color:#a6e22e">crypto</span>.<span style="color:#a6e22e">Hash</span>(<span style="color:#ae81ff">0</span>))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// generate back the ed25519 key from the seed
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// and ask it to sign the data
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">privKey</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ed25519</span>.<span style="color:#a6e22e">NewKeyFromSeed</span>(<span style="color:#a6e22e">keySeed</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">sig</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">privKey</span>.<span style="color:#a6e22e">Sign</span>(<span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">data</span>, <span style="color:#a6e22e">opts</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">nil</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">sig</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// verifyPayload verifies the signature of the data with the public key stored in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">verifyPayload</span>(<span style="color:#a6e22e">data</span>, <span style="color:#a6e22e">sig</span> []<span style="color:#66d9ef">byte</span>, <span style="color:#a6e22e">ring</span> <span style="color:#66d9ef">int</span>) (<span style="color:#66d9ef">bool</span>, <span style="color:#66d9ef">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// retrieve the key ID of the private key stored in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">keyID</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">retrievePrivKeyID</span>(<span style="color:#a6e22e">ring</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">false</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// retrieve the key payload from the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">keySeed</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">getKeyPayload</span>(<span style="color:#a6e22e">keyID</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">false</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// generate back the ed25519 key from the seed
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// and ask it to verify the data
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">pubKey</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ed25519</span>.<span style="color:#a6e22e">NewKeyFromSeed</span>(<span style="color:#a6e22e">keySeed</span>).<span style="color:#a6e22e">Public</span>().(<span style="color:#a6e22e">ed25519</span>.<span style="color:#a6e22e">PublicKey</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// verify the signature
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> !<span style="color:#a6e22e">ed25519</span>.<span style="color:#a6e22e">Verify</span>(<span style="color:#a6e22e">pubKey</span>, <span style="color:#a6e22e">data</span>, <span style="color:#a6e22e">sig</span>) {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">false</span>, <span style="color:#a6e22e">err</span>
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> <span style="color:#66d9ef">true</span>, <span style="color:#66d9ef">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">// startService starts the HTTP service which exposes two endpoints:
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">// * /generate - generates a new payload and signs it with the key stored in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">// * /verify - verifies the signature of the payload with the public key stored in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">startService</span>() {
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">HandleFunc</span>(<span style="color:#e6db74">&#34;/generate&#34;</span>, <span style="color:#66d9ef">func</span>(<span style="color:#a6e22e">w</span> <span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">ResponseWriter</span>, <span style="color:#a6e22e">r</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">Request</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// create some data attached to the current timestamp in unix seconds
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#a6e22e">data</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Sprintf</span>(<span style="color:#e6db74">&#34;some_data_%d&#34;</span>, <span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>().<span style="color:#a6e22e">Unix</span>())
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// sign the data with the key stored in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#a6e22e">sig</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">signPayload</span>([]byte(<span style="color:#a6e22e">data</span>), <span style="color:#a6e22e">ringId</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">slog</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#e6db74">&#34;failed to generate signature&#34;</span>, <span style="color:#e6db74">&#34;error&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">WriteHeader</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">StatusInternalServerError</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// encode the signature in base64 so that it can be sent over the wire
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#a6e22e">b64Sig</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">base64</span>.<span style="color:#a6e22e">StdEncoding</span>.<span style="color:#a6e22e">EncodeToString</span>(<span style="color:#a6e22e">sig</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">payload</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">ServicePayload</span>{
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">Signature</span>: <span style="color:#a6e22e">b64Sig</span>,
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">Payload</span>:   <span style="color:#a6e22e">data</span>,
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// encode the payload in JSON
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#a6e22e">buf</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">json</span>.<span style="color:#a6e22e">Marshal</span>(<span style="color:#a6e22e">payload</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">slog</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#e6db74">&#34;failed to marshal payload&#34;</span>, <span style="color:#e6db74">&#34;error&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">WriteHeader</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">StatusInternalServerError</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// adjust content type and write the response
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">Header</span>().<span style="color:#a6e22e">Add</span>(<span style="color:#e6db74">&#34;Content-Type&#34;</span>, <span style="color:#e6db74">&#34;application/json&#34;</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> = <span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">Write</span>(<span style="color:#a6e22e">buf</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">slog</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#e6db74">&#34;failed to write response&#34;</span>, <span style="color:#e6db74">&#34;error&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">WriteHeader</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">StatusInternalServerError</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	})
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">HandleFunc</span>(<span style="color:#e6db74">&#34;/verify&#34;</span>, <span style="color:#66d9ef">func</span>(<span style="color:#a6e22e">w</span> <span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">ResponseWriter</span>, <span style="color:#a6e22e">r</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">Request</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// decode the payload from JSON
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#66d9ef">var</span> <span style="color:#a6e22e">payload</span> <span style="color:#a6e22e">ServicePayload</span>
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">json</span>.<span style="color:#a6e22e">NewDecoder</span>(<span style="color:#a6e22e">r</span>.<span style="color:#a6e22e">Body</span>).<span style="color:#a6e22e">Decode</span>(<span style="color:#f92672">&amp;</span><span style="color:#a6e22e">payload</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">slog</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#e6db74">&#34;failed to decode payload&#34;</span>, <span style="color:#e6db74">&#34;error&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">WriteHeader</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">StatusInternalServerError</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// decode the signature from base64 to bytes
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#a6e22e">sig</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">base64</span>.<span style="color:#a6e22e">StdEncoding</span>.<span style="color:#a6e22e">DecodeString</span>(<span style="color:#a6e22e">payload</span>.<span style="color:#a6e22e">Signature</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">slog</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#e6db74">&#34;failed to decode signature&#34;</span>, <span style="color:#e6db74">&#34;error&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">WriteHeader</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">StatusBadRequest</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// verify the signature with the public key stored in the keyring
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#a6e22e">res</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">verifyPayload</span>([]byte(<span style="color:#a6e22e">payload</span>.<span style="color:#a6e22e">Payload</span>), <span style="color:#a6e22e">sig</span>, <span style="color:#a6e22e">ringId</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">slog</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#e6db74">&#34;failed to execute payload verification&#34;</span>, <span style="color:#e6db74">&#34;error&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">WriteHeader</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">StatusInternalServerError</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">// if the signature is not valid, return 401
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#66d9ef">if</span> !<span style="color:#a6e22e">res</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">slog</span>.<span style="color:#a6e22e">Error</span>(<span style="color:#e6db74">&#34;failed to verify payload&#34;</span>, <span style="color:#e6db74">&#34;error&#34;</span>, <span style="color:#a6e22e">res</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">w</span>.<span style="color:#a6e22e">WriteHeader</span>(<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">StatusUnauthorized</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">return</span>
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">slog</span>.<span style="color:#a6e22e">Info</span>(<span style="color:#e6db74">&#34;payload verified&#34;</span>, <span style="color:#e6db74">&#34;payload&#34;</span>, <span style="color:#a6e22e">payload</span>.<span style="color:#a6e22e">Payload</span>)
+</span></span><span style="display:flex;"><span>	})
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">ListenAndServe</span>(<span style="color:#e6db74">&#34;:8080&#34;</span>, <span style="color:#66d9ef">nil</span>)
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Now we can test our service with curl:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># we ask our service to generate a new payload along with its signature</span>
+</span></span><span style="display:flex;"><span>curl  -v <span style="color:#e6db74">&#39;&lt;http://localhost:8080/generate&#39;</span>&gt; | jq
+</span></span><span style="display:flex;"><span>  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+</span></span><span style="display:flex;"><span>                                 Dload  Upload   Total   Spent    Left  Speed
+</span></span><span style="display:flex;"><span>  <span style="color:#ae81ff">0</span>     <span style="color:#ae81ff">0</span>    <span style="color:#ae81ff">0</span>     <span style="color:#ae81ff">0</span>    <span style="color:#ae81ff">0</span>     <span style="color:#ae81ff">0</span>      <span style="color:#ae81ff">0</span>      <span style="color:#ae81ff">0</span> --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:8080...
+</span></span><span style="display:flex;"><span>* Connected to localhost <span style="color:#f92672">(</span>127.0.0.1<span style="color:#f92672">)</span> port <span style="color:#ae81ff">8080</span> <span style="color:#f92672">(</span><span style="color:#75715e">#0)</span>
+</span></span><span style="display:flex;"><span>&gt; GET /generate HTTP/1.1
+</span></span><span style="display:flex;"><span>&gt; Host: localhost:8080
+</span></span><span style="display:flex;"><span>&gt; User-Agent: curl/8.0.1
+</span></span><span style="display:flex;"><span>&gt; Accept: */*
+</span></span><span style="display:flex;"><span>&gt; 
+</span></span><span style="display:flex;"><span>&lt; HTTP/1.1 <span style="color:#ae81ff">200</span> OK
+</span></span><span style="display:flex;"><span>&lt; Content-Type: application/json
+</span></span><span style="display:flex;"><span>&lt; Date: Mon, <span style="color:#ae81ff">28</span> Aug <span style="color:#ae81ff">2023</span> 13:21:08 GMT
+</span></span><span style="display:flex;"><span>&lt; Content-Length: <span style="color:#ae81ff">137</span>
+</span></span><span style="display:flex;"><span>&lt; 
+</span></span><span style="display:flex;"><span><span style="color:#f92672">{</span> <span style="color:#f92672">[</span><span style="color:#ae81ff">137</span> bytes data<span style="color:#f92672">]</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">100</span>   <span style="color:#ae81ff">137</span>  <span style="color:#ae81ff">100</span>   <span style="color:#ae81ff">137</span>    <span style="color:#ae81ff">0</span>     <span style="color:#ae81ff">0</span>   238k      <span style="color:#ae81ff">0</span> --:--:-- --:--:-- --:--:--  133k
+</span></span><span style="display:flex;"><span>* Connection <span style="color:#75715e">#0 to host localhost left intact</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">{</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#e6db74">&#34;signature&#34;</span>: <span style="color:#e6db74">&#34;QO1mZet+wpgODp+fs8PbfHvKqYBrX2OGxfxDyT8e+tH7DBVyBUafFNCTCbEiFrhm0urgrON9GkQBdv/0REpIBw==&#34;</span>,
+</span></span><span style="display:flex;"><span>  <span style="color:#e6db74">&#34;payload&#34;</span>: <span style="color:#e6db74">&#34;some_data_1693228868&#34;</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># now we can verify the signature with the /verify endpoint, it returns 200 if the signature is valid</span>
+</span></span><span style="display:flex;"><span>curl -v <span style="color:#e6db74">&#39;&lt;http://localhost:8080/verify&#39;</span>&gt; --data <span style="color:#e6db74">&#39;{&#34;signature&#34;:&#34;QO1mZet+wpgODp+fs8PbfHvKqYBrX2OGxfxDyT8e+tH7DBVyBUafFNCTCbEiFrhm0urgrON9GkQBdv/0REpIBw==&#34;, &#34;payload&#34;:&#34;some_data_1693228868&#34;}&#39;</span>
+</span></span><span style="display:flex;"><span>*   Trying 127.0.0.1:8080...
+</span></span><span style="display:flex;"><span>* Connected to localhost <span style="color:#f92672">(</span>127.0.0.1<span style="color:#f92672">)</span> port <span style="color:#ae81ff">8080</span> <span style="color:#f92672">(</span><span style="color:#75715e">#0)</span>
+</span></span><span style="display:flex;"><span>&gt; POST /verify HTTP/1.1
+</span></span><span style="display:flex;"><span>&gt; Host: localhost:8080
+</span></span><span style="display:flex;"><span>&gt; User-Agent: curl/8.0.1
+</span></span><span style="display:flex;"><span>&gt; Accept: */*
+</span></span><span style="display:flex;"><span>&gt; Content-Length: <span style="color:#ae81ff">138</span>
+</span></span><span style="display:flex;"><span>&gt; Content-Type: application/x-www-form-urlencoded
+</span></span><span style="display:flex;"><span>&gt; 
+</span></span><span style="display:flex;"><span>&lt; HTTP/1.1 <span style="color:#ae81ff">200</span> OK
+</span></span><span style="display:flex;"><span>&lt; Date: Mon, <span style="color:#ae81ff">28</span> Aug <span style="color:#ae81ff">2023</span> 13:22:14 GMT
+</span></span><span style="display:flex;"><span>&lt; Content-Length: <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>&lt; 
+</span></span><span style="display:flex;"><span>* Connection <span style="color:#75715e">#0 to host localhost left intact</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># let&#39;s try to verify with a different payload, e.g. changing the last digit to 9 in payload</span>
+</span></span><span style="display:flex;"><span>curl -v <span style="color:#e6db74">&#39;&lt;http://localhost:8080/verify&#39;</span>&gt; --data <span style="color:#e6db74">&#39;{&#34;signature&#34;:&#34;QO1mZet+wpgODp+fs8PbfHvKqYBrX2OGxfxDyT8e+tH7DBVyBUafFNCTCbEiFrhm0urgrON9GkQBdv/0REpIBw==&#34;, &#34;payload&#34;:&#34;some_data_1693228869&#34;}&#39;</span>
+</span></span><span style="display:flex;"><span>*   Trying 127.0.0.1:8080...
+</span></span><span style="display:flex;"><span>* Connected to localhost <span style="color:#f92672">(</span>127.0.0.1<span style="color:#f92672">)</span> port <span style="color:#ae81ff">8080</span> <span style="color:#f92672">(</span><span style="color:#75715e">#0)</span>
+</span></span><span style="display:flex;"><span>&gt; POST /verify HTTP/1.1
+</span></span><span style="display:flex;"><span>&gt; Host: localhost:8080
+</span></span><span style="display:flex;"><span>&gt; User-Agent: curl/8.0.1
+</span></span><span style="display:flex;"><span>&gt; Accept: */*
+</span></span><span style="display:flex;"><span>&gt; Content-Length: <span style="color:#ae81ff">138</span>
+</span></span><span style="display:flex;"><span>&gt; Content-Type: application/x-www-form-urlencoded
+</span></span><span style="display:flex;"><span>&gt; 
+</span></span><span style="display:flex;"><span>&lt; HTTP/1.1 <span style="color:#ae81ff">401</span> Unauthorized
+</span></span><span style="display:flex;"><span>&lt; Date: Mon, <span style="color:#ae81ff">28</span> Aug <span style="color:#ae81ff">2023</span> 13:23:03 GMT
+</span></span><span style="display:flex;"><span>&lt; Content-Length: <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>&lt; 
+</span></span><span style="display:flex;"><span>* Connection <span style="color:#75715e">#0 to host localhost left intact</span>
+</span></span></code></pre></div><h2 id="conclusion">Conclusion</h2>
+<p>In this article we’ve seen how to use Linux Keyrings to store sensitive information such as keys. We’ve seen how to use the keyctl commandline tool to create/delete/update keys and keyrings. Then we’ve seen how to use the golang/x/unix package to interact with the kernel keyring, as it provides syscalls wrappers, and the crypto/ed25519 package to create/parse keys, sign and verify the payload. It is a lot of material to digest, but it is worth to improve security of our applications, and moreover it is fun to learn new things! Please consider that we scratched the surface of a huge topic, so the motivated person is encouraged to go through man pages and dive deeper into the topic.</p>
+
+      </div>
+    </article>
+
+    <hr />
+
+    <div class="post-info">
+      
+    <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-tag meta-icon"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7" y2="7"></line></svg>
+
+        <span class="tag"><a href="https://example.org/tags/linux/">linux</a></span>
+        <span class="tag"><a href="https://example.org/tags/security/">security</a></span>
+        <span class="tag"><a href="https://example.org/tags/applications/">applications</a></span>
+        <span class="tag"><a href="https://example.org/tags/keyrings/">keyrings</a></span>
+        
+    </p>
+
+      
+    <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-folder meta-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+
+        <span class="tag"><a href="https://example.org/categories/security/">security</a></span>
+        <span class="tag"><a href="https://example.org/categories/linux/">linux</a></span>
+        <span class="tag"><a href="https://example.org/categories/keyrings/">keyrings</a></span>
+        
+    </p>
+
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file-text">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        3311 Words
+      </p>
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-calendar">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        
+          2023-10-12 02:00
+        
+
+         
+          
+        
+      </p>
+    </div>
+
+    
+    <div class="pagination">
+        
+
+        <div class="pagination__buttons">
+            
+
+            
+            <span class="button next">
+                <a href="https://example.org/posts/11-landlock-2023/">
+                    <span class="button__text">Intro to Landlock</span>
+                    <span class="button__icon">→</span>
+                </a>
+            </span>
+            
+        </div>
+    </div>
+
+
+    
+
+    
+
+    
+
+  </main>
+
+            </div>
+
+            
+                <footer class="footer">
+    
+    
+</footer>
+
+            
+        </div>
+
+        
+
+
+
+<script type="text/javascript" src="/bundle.min.85fad2de4f13fec3bcb3b3cb10430cdb44a7b4a9749b32938241a5c6e77718df7624f1002b880521fdc26e24ec1077fda214bf1cb36ee3045510760d09638cae.js" integrity="sha512-hfrS3k8T/sO8s7PLEEMM20SntKl0mzKTgkGlxud3GN92JPEAK4gFIf3CbiTsEHf9ohS/HLNu4wRVEHYNCWOMrg=="></script>
+
+
+
+
+    </body>
+</html>

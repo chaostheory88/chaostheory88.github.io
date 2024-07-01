@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Security on 0xcf9</title>
+    <link>https://example.org/tags/security/</link>
+    <description>Recent content in Security on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Thu, 12 Oct 2023 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://example.org/tags/security/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Intro to Keyrings</title>
+      <link>https://example.org/posts/10-keyrings-2023/</link>
+      <pubDate>Thu, 12 Oct 2023 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/10-keyrings-2023/</guid>
+      <description>This is the third part of the series on securing applications on Linux. The first part was about Linux Seccompand the second part was about Linux Landlock. This third part is about Linux Keyrings.&#xA;What are Linux Keyrings? As usual we start citing the appropriate man page, keyrings(7):&#xA;The Linux key-management facility is primarily a way for various kernel components to retain or cache security data, authentication keys, encryption keys, and other data in the kernel System call interfaces are provided so that user-space programs can manage those objects and also use the facility for their own purposes; see add_key(2), request_key(2), and keyctl(2).</description>
+    </item>
+    <item>
+      <title>Intro to Landlock</title>
+      <link>https://example.org/posts/11-landlock-2023/</link>
+      <pubDate>Tue, 25 Jul 2023 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/11-landlock-2023/</guid>
+      <description>In a previous article we shown up how it is possible to make our applications more secure through the use of seccomp which allows us to restrict the syscalls that a process or a thread can invoke. In this article we will see how to use Landlock LSM to further improve the security of our applications.&#xA;Introduction: What&amp;rsquo;s Landlock? Landlock is a Linux security module that allows to restrict the access to the filesystem.</description>
+    </item>
+    <item>
+      <title>Intro to Seccomp</title>
+      <link>https://example.org/posts/12-seccomp-2023/</link>
+      <pubDate>Tue, 17 Jan 2023 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/12-seccomp-2023/</guid>
+      <description>Whenever we run a program on our machine, it runs with the same privileges as the user that started it. This is a problem, because it means that if we run a program that has a bug in it, if exploited, that bug can be used to compromise the whole machine. This is why it is important to run programs with the least amount of privileges possible.&#xA;One way to do this is to use a sandbox.</description>
+    </item>
+    <item>
+      <title>Writing a simple Traceroute in Go</title>
+      <link>https://example.org/posts/13-traceroute-2022/</link>
+      <pubDate>Tue, 08 Nov 2022 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/13-traceroute-2022/</guid>
+      <description>If your question is why, the answer is quite simple: why not? And by the way, my favorite question is: how?&#xA;So, how does a traceroute program works in general? (In this post we&amp;rsquo;re considering traceroute in IPv4 networks)&#xA;Well, basically traceroute exploits a very simple concept. It sends IPv4 packets starting with TTL = 1 to a remote host, continues incrementing it and expects back ICMPv4 TimeExceeded packets from intermediary hosts or an ICMPv4 EchoReply from the destination one.</description>
+    </item>
+  </channel>
+</rss>

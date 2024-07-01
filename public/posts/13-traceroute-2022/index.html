@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="author" content="">
+<meta name="description" content="If your question is why, the answer is quite simple: why not? And by the way, my favorite question is: how?
+So, how does a traceroute program works in general? (In this post we&amp;rsquo;re considering traceroute in IPv4 networks)
+Well, basically traceroute exploits a very simple concept. It sends IPv4 packets starting with TTL = 1 to a remote host, continues incrementing it and expects back ICMPv4 TimeExceeded packets from intermediary hosts or an ICMPv4 EchoReply from the destination one." />
+<meta name="keywords" content=", linux, security, programming, go, golang, applications" />
+<meta name="robots" content="noodp" />
+<meta name="theme-color" content="" />
+<link rel="canonical" href="https://example.org/posts/13-traceroute-2022/" />
+
+
+    <title>
+        
+            Writing a simple Traceroute in Go :: 0xcf9 
+        
+    </title>
+
+
+
+
+
+<link rel="stylesheet" href="/main.949191c1dcc9c4a887997048b240354e47152016d821198f89448496ba42e491.css" integrity="sha256-lJGRwdzJxKiHmXBIskA1TkcVIBbYIRmPiUSElrpC5JE=">
+
+
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="">
+
+
+
+  <meta itemprop="name" content="Writing a simple Traceroute in Go">
+  <meta itemprop="description" content="If your question is why, the answer is quite simple: why not? And by the way, my favorite question is: how?
+So, how does a traceroute program works in general? (In this post we&rsquo;re considering traceroute in IPv4 networks)
+Well, basically traceroute exploits a very simple concept. It sends IPv4 packets starting with TTL = 1 to a remote host, continues incrementing it and expects back ICMPv4 TimeExceeded packets from intermediary hosts or an ICMPv4 EchoReply from the destination one.">
+  <meta itemprop="datePublished" content="2022-11-08T00:00:00+00:00">
+  <meta itemprop="dateModified" content="2022-11-08T00:00:00+00:00">
+  <meta itemprop="wordCount" content="2476">
+  <meta itemprop="keywords" content="Linux,Security,Programming,Go,Golang,Applications">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Writing a simple Traceroute in Go">
+<meta name="twitter:description" content="If your question is why, the answer is quite simple: why not? And by the way, my favorite question is: how?
+So, how does a traceroute program works in general? (In this post we&rsquo;re considering traceroute in IPv4 networks)
+Well, basically traceroute exploits a very simple concept. It sends IPv4 packets starting with TTL = 1 to a remote host, continues incrementing it and expects back ICMPv4 TimeExceeded packets from intermediary hosts or an ICMPv4 EchoReply from the destination one.">
+
+
+
+
+
+    <meta property="article:section" content="security" />
+
+    <meta property="article:section" content="networking" />
+
+
+
+    <meta property="article:published_time" content="2022-11-08 00:00:00 &#43;0000 UTC" />
+
+
+
+
+
+
+
+
+
+
+
+    </head>
+
+    
+        <body>
+    
+    
+        <div class="container">
+            <header class="header">
+    <span class="header__inner">
+        <a href="/" style="text-decoration: none;">
+    <div class="logo">
+        
+            <span class="logo__mark">></span>
+            <span class="logo__text ">
+                hello</span>
+            <span class="logo__cursor" style=
+                  "
+                   
+                   ">
+            </span>
+        
+    </div>
+</a>
+
+
+        <span class="header__right">
+            
+                <nav class="menu">
+    <ul class="menu__inner"><li><a href="/posts/">Posts</a></li><li><a href="/tags/">Tags</a></li>
+    </ul>
+</nav>
+
+                <span class="menu-trigger">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                    </svg>
+                </span>
+            
+        </span>
+    </span>
+</header>
+
+
+            <div class="content">
+                
+  <main class="post">
+
+    <div class="post-info">
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-clock">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        12 minutes
+
+        
+      </p>
+    </div>
+
+    <article>
+      <h1 class="post-title">
+        <a href="https://example.org/posts/13-traceroute-2022/">Writing a simple Traceroute in Go</a>
+      </h1>
+
+      
+
+      
+
+      
+
+      <div class="post-content">
+        <p>If your question is why, the answer is quite simple: why not? And by the way, my favorite question is: how?</p>
+<p>So, how does a traceroute program works in general? (<em>In this post we&rsquo;re considering traceroute in IPv4 networks</em>)</p>
+<p>Well, basically traceroute exploits a very simple concept. It sends IPv4 packets starting with TTL = 1 to a remote host, continues incrementing it and expects back ICMPv4 TimeExceeded packets from intermediary hosts or an ICMPv4 EchoReply from the destination one.</p>
+<p>IPv4 Packet
+<img src="/ipv4_packet.jpg" alt="ipv4_packet"></p>
+<p>ICMP Packet
+<img src="/icmp_packet.jpg" alt="icmp_packet"></p>
+<p>So, suppose we’re host <code>192.168.1.2</code> and our target is host <code>10.1.14.10</code>. And, suppose there are <code>N</code> hosts that need to be traversed before reaching our target. What happens then?</p>
+<p><code>192.168.1.1</code> forges a series of IPv4 packets that range from <code>1</code> to say <code>M</code> (where <code>M</code> is a tunable parameter to denote the maximum number of hosts to traverse). It sends those packets and maybe in a different thread starts waiting for ICMPv4 messages.</p>
+<p>Notice that this explanation is pretty much simplistic and I encourage you to read manual page of <a href="https://man7.org/linux/man-pages/man8/traceroute.8.html">traceroute(8)</a>.</p>
+<p>The simple traceroute program we’re going to build uses Linux ICMP sockets. Basically a kind of raw socket where we bind on an address and wait for ICMP packets. There’s a nice [Go package<a href="https://pkg.go.dev/golang.org/x/net"></a> which will help us opening such kind of sockets and provides us all with all the data structures we need to parse and send packets.</p>
+<p>So let’s start! <em>(Notice that here we will provide most interesting snippets of code, the complete code will be linked at the end of the article)</em></p>
+<p>First of all we need to import relevant packages we need:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">import</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;golang.org/x/net/icmp&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;golang.org/x/net/ipv4&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span></code></pre></div><p>Now what?</p>
+<p>Well, we create an ICMP socket in the main of our application and start listening on it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// start listening for ICMP messages
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">c</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">ListenPacket</span>(<span style="color:#e6db74">&#34;ip4:icmp&#34;</span>, <span style="color:#e6db74">&#34;&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">Close</span>()
+</span></span><span style="display:flex;"><span>	<span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Now that we’ve our connection object, we need a function that waits for packets on it and processes them. Of course we’re going to run this function in a different goroutine. Why? Because later we’re going to send packets from main routine and this routine will be already there to catch responses.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">waitResponses</span>(<span style="color:#a6e22e">c</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">PacketConn</span>, <span style="color:#a6e22e">timeout</span> <span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Duration</span>,
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">startTime</span> <span style="color:#66d9ef">float64</span>, <span style="color:#a6e22e">targetHost</span> <span style="color:#66d9ef">string</span>, <span style="color:#a6e22e">maxTTL</span> <span style="color:#66d9ef">int</span>, <span style="color:#a6e22e">id</span> <span style="color:#66d9ef">int</span>, <span style="color:#a6e22e">wg</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">sync</span>.<span style="color:#a6e22e">WaitGroup</span>) {
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">wg</span>.<span style="color:#a6e22e">Add</span>(<span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// create a new Timer
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">timer</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">NewTimer</span>(<span style="color:#a6e22e">timeout</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// create a map to receive results
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">results</span> <span style="color:#f92672">:=</span> make(<span style="color:#66d9ef">map</span>[<span style="color:#66d9ef">int</span>]<span style="color:#a6e22e">Result</span>, <span style="color:#ae81ff">0</span>)
+</span></span><span style="display:flex;"><span>	
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">go</span> <span style="color:#66d9ef">func</span>() {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">for</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#75715e">// Read the response
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>			<span style="color:#a6e22e">reply</span> <span style="color:#f92672">:=</span> make([]<span style="color:#66d9ef">byte</span>, <span style="color:#ae81ff">1500</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">n</span>, <span style="color:#a6e22e">peer</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">ReadFrom</span>(<span style="color:#a6e22e">reply</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>			<span style="color:#75715e">// Parse the response
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>			<span style="color:#a6e22e">rm</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">ParseMessage</span>(<span style="color:#ae81ff">1</span>, <span style="color:#a6e22e">reply</span>[:<span style="color:#a6e22e">n</span>])
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>				<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to parse ICMPv4 message: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>			<span style="color:#75715e">// check type of ICMP message
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>			<span style="color:#66d9ef">switch</span> <span style="color:#a6e22e">rm</span>.<span style="color:#a6e22e">Type</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">case</span> <span style="color:#a6e22e">ipv4</span>.<span style="color:#a6e22e">ICMPTypeEchoReply</span>:
+</span></span><span style="display:flex;"><span>				<span style="color:#a6e22e">t</span>, <span style="color:#a6e22e">ok</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rm</span>.<span style="color:#a6e22e">Body</span>.(<span style="color:#f92672">*</span><span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">Echo</span>)
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">if</span> !<span style="color:#a6e22e">ok</span> {
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;not an echo reply&#34;</span>)
+</span></span><span style="display:flex;"><span>					<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>				}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>				<span style="color:#75715e">// we skip if the response does not
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#75715e">// come from the target host
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">peer</span>.<span style="color:#a6e22e">String</span>() <span style="color:#f92672">!=</span> <span style="color:#a6e22e">targetHost</span> {
+</span></span><span style="display:flex;"><span>					<span style="color:#66d9ef">continue</span>
+</span></span><span style="display:flex;"><span>				}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>                <span style="color:#75715e">// store results in a map keyed by thesequence number
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#a6e22e">r</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">Result</span>{
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">IP</span>:            <span style="color:#a6e22e">peer</span>.<span style="color:#a6e22e">String</span>(),
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">HOP</span>:           <span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Seq</span>,
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">TimeElapsedMS</span>: float64(<span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>().<span style="color:#a6e22e">UnixNano</span>()<span style="color:#f92672">/</span><span style="color:#ae81ff">1000000</span>) <span style="color:#f92672">-</span> <span style="color:#a6e22e">startTime</span>,
+</span></span><span style="display:flex;"><span>				}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>				<span style="color:#75715e">// store the result
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#a6e22e">results</span>[<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Seq</span>] = <span style="color:#a6e22e">r</span>
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">case</span> <span style="color:#a6e22e">ipv4</span>.<span style="color:#a6e22e">ICMPTypeTimeExceeded</span>:
+</span></span><span style="display:flex;"><span>				<span style="color:#75715e">// cast to icmp.TimeExceeded
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#a6e22e">t</span>, <span style="color:#a6e22e">ok</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rm</span>.<span style="color:#a6e22e">Body</span>.(<span style="color:#f92672">*</span><span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">TimeExceeded</span>)
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">if</span> !<span style="color:#a6e22e">ok</span> {
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to cast to icmp.TimeExceeded&#34;</span>)
+</span></span><span style="display:flex;"><span>					<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>				}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>				<span style="color:#75715e">// icmp.TimeExceeded contains the original packet
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#75715e">// so we grab IPv4 header and ICMP header
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#a6e22e">ipHdr</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">ParseIPv4Header</span>(<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Data</span>)
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to parse IPv4 header&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>					<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>				}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>				<span style="color:#75715e">// grab the ICMP header
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">icmpMsg</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">ParseMessage</span>(<span style="color:#ae81ff">1</span>, <span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Data</span>[<span style="color:#a6e22e">ipHdr</span>.<span style="color:#a6e22e">Len</span>:]); <span style="color:#a6e22e">err</span> <span style="color:#f92672">==</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>					<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">msg</span>, <span style="color:#a6e22e">ok</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmpMsg</span>.<span style="color:#a6e22e">Body</span>.(<span style="color:#f92672">*</span><span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">Echo</span>); <span style="color:#a6e22e">ok</span> <span style="color:#f92672">&amp;&amp;</span> <span style="color:#a6e22e">msg</span>.<span style="color:#a6e22e">ID</span> <span style="color:#f92672">==</span> <span style="color:#a6e22e">id</span> {
+</span></span><span style="display:flex;"><span>						<span style="color:#a6e22e">r</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">Result</span>{
+</span></span><span style="display:flex;"><span>							<span style="color:#a6e22e">IP</span>:            <span style="color:#a6e22e">peer</span>.<span style="color:#a6e22e">String</span>(),
+</span></span><span style="display:flex;"><span>							<span style="color:#a6e22e">HOP</span>:           <span style="color:#a6e22e">msg</span>.<span style="color:#a6e22e">Seq</span>,
+</span></span><span style="display:flex;"><span>							<span style="color:#a6e22e">TimeElapsedMS</span>: float64(<span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>().<span style="color:#a6e22e">UnixNano</span>()<span style="color:#f92672">/</span><span style="color:#ae81ff">1000000</span>) <span style="color:#f92672">-</span> <span style="color:#a6e22e">startTime</span>,
+</span></span><span style="display:flex;"><span>						}
+</span></span><span style="display:flex;"><span>						<span style="color:#a6e22e">results</span>[<span style="color:#a6e22e">msg</span>.<span style="color:#a6e22e">Seq</span>] = <span style="color:#a6e22e">r</span>
+</span></span><span style="display:flex;"><span>					}
+</span></span><span style="display:flex;"><span>				} <span style="color:#66d9ef">else</span> {
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to parse inner ICMPv4 message&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>				}
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">default</span>:
+</span></span><span style="display:flex;"><span>				<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;Unexpected response %+v: %s&#34;</span>, <span style="color:#a6e22e">rm</span>, <span style="color:#a6e22e">peer</span>.<span style="color:#a6e22e">String</span>())
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#f92672">&lt;-</span><span style="color:#a6e22e">timer</span>.<span style="color:#a6e22e">C</span>
+</span></span><span style="display:flex;"><span>	
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// print the results
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">for</span> <span style="color:#a6e22e">i</span> <span style="color:#f92672">:=</span> <span style="color:#ae81ff">1</span>; <span style="color:#a6e22e">i</span> <span style="color:#f92672">&lt;=</span> <span style="color:#a6e22e">maxTTL</span>; <span style="color:#a6e22e">i</span><span style="color:#f92672">++</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">r</span>, <span style="color:#a6e22e">ok</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">results</span>[<span style="color:#a6e22e">i</span>]; <span style="color:#a6e22e">ok</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%d\t%s\t%.2f ms\n&#34;</span>, <span style="color:#a6e22e">r</span>.<span style="color:#a6e22e">HOP</span>, <span style="color:#a6e22e">r</span>.<span style="color:#a6e22e">IP</span>, <span style="color:#a6e22e">r</span>.<span style="color:#a6e22e">TimeElapsedMS</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">r</span>.<span style="color:#a6e22e">IP</span> <span style="color:#f92672">==</span> <span style="color:#a6e22e">targetHost</span> {
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		} <span style="color:#66d9ef">else</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%d\t*\n&#34;</span>, <span style="color:#a6e22e">i</span>)
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">wg</span>.<span style="color:#a6e22e">Done</span>()
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Do not get intimidated by this code, we’re just going to break it down!</p>
+<p>First of all, parameters:</p>
+<ul>
+<li><code>c</code> is our packet connection we just created into our main.</li>
+<li><code>timeout</code> is the maximum timeout we’re going to wait for packets to come. We don’t want our program runs forever, right?</li>
+<li><code>startTime</code> is the time in milliseconds from Epoch when we started our program</li>
+<li><code>targetHost</code> is the final host we want to reach with our packets</li>
+<li><code>maxTTL</code> is the maximum number of the TTL we used aka the maximum number of hosts that we could traverse to reach our target</li>
+<li><code>id</code> is a crafted ID that we use to check that’s the reply TimeExceeded packet we’re waiting for, e.g., is one of those we forged (more on this later)</li>
+<li><code>wg</code> is a WaitGroup, we use it so our main routine does not just exits before we finish to process packets or timeout has just expired</li>
+</ul>
+<p>We first create some variables we’ll need in this routine:</p>
+<ul>
+<li>a timer to control if we’ve reached a timeout and so we’ve to just return</li>
+<li>a map were we’re going to store a Result objects as values (more in a moment). Key is the TTL of a packet, so we can check in which position of the route it was the traversed host.</li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// create a new Timer
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">timer</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">NewTimer</span>(<span style="color:#a6e22e">timeout</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// create a map to receive results
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">results</span> <span style="color:#f92672">:=</span> make(<span style="color:#66d9ef">map</span>[<span style="color:#66d9ef">int</span>]<span style="color:#a6e22e">Result</span>, <span style="color:#ae81ff">0</span>)
+</span></span></code></pre></div><p>Here there’s our result type:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#66d9ef">type</span> <span style="color:#a6e22e">Result</span> <span style="color:#66d9ef">struct</span> {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// IP address of this HOP
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">IP</span>            <span style="color:#66d9ef">string</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// HOP number (aka initial TTL that produced this host)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">HOP</span>           <span style="color:#66d9ef">int</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// How did it take in millisecs for this host to reply our packet
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">TimeElapsedMS</span> <span style="color:#66d9ef">float64</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Now we create a new goroutine.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#66d9ef">go</span> <span style="color:#66d9ef">func</span>() {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">for</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#75715e">// Read the response
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>			<span style="color:#a6e22e">reply</span> <span style="color:#f92672">:=</span> make([]<span style="color:#66d9ef">byte</span>, <span style="color:#ae81ff">1500</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">n</span>, <span style="color:#a6e22e">peer</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">ReadFrom</span>(<span style="color:#a6e22e">reply</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>			<span style="color:#75715e">// Parse the response
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>			<span style="color:#a6e22e">rm</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">ParseMessage</span>(<span style="color:#ae81ff">1</span>, <span style="color:#a6e22e">reply</span>[:<span style="color:#a6e22e">n</span>])
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>				<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to parse ICMPv4 message: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">...</span><span style="color:#a6e22e">snipped</span><span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>	}()
+</span></span></code></pre></div><p>We loop reading packets, since IPv4 maximum transfer unit is 1500 bytes, we prepare a buffer large enough to hold it. The ReadFrom function on the c connection object returns us:</p>
+<ul>
+<li><code>n</code> which is the number of byte read from the connection</li>
+<li><code>peer</code> is a net.Addr object which contains IPv4 source address of the packet</li>
+<li><code>err</code> will be not nil if something went wrong while reading the packet</li>
+</ul>
+<p>Once we’ve our <code>reply</code> buffer filled with our <code>ICMPv4</code> packet data we use <code>icmp.ParseMessage</code> and give to this function the protocol number (<code>1</code> for <code>ICMPv4</code>) and a slice of the buffer from start to <code>n</code>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">package</span> <span style="color:#a6e22e">icmp</span> <span style="color:#75715e">// import &#34;golang.org/x/net/icmp&#34;
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">type</span> <span style="color:#a6e22e">Message</span> <span style="color:#66d9ef">struct</span> {
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">Type</span>     <span style="color:#a6e22e">Type</span>        <span style="color:#75715e">// type, either ipv4.ICMPType or ipv6.ICMPType
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">Code</span>     <span style="color:#66d9ef">int</span>         <span style="color:#75715e">// code
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">Checksum</span> <span style="color:#66d9ef">int</span>         <span style="color:#75715e">// checksum
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">Body</span>     <span style="color:#a6e22e">MessageBody</span> <span style="color:#75715e">// body
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>}
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">A</span> <span style="color:#a6e22e">Message</span> <span style="color:#a6e22e">represents</span> <span style="color:#a6e22e">an</span> <span style="color:#a6e22e">ICMP</span> <span style="color:#a6e22e">message</span>.
+</span></span></code></pre></div><p>Since the socket will return us all <code>ICMPv4</code> packets observed on the “wire” we now need to check the Message.Type field and start filtering the information we need:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">...</span><span style="color:#a6e22e">snipped</span><span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>			<span style="color:#75715e">// check type of ICMP message
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>			<span style="color:#66d9ef">switch</span> <span style="color:#a6e22e">rm</span>.<span style="color:#a6e22e">Type</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">case</span> <span style="color:#a6e22e">ipv4</span>.<span style="color:#a6e22e">ICMPTypeEchoReply</span>:
+</span></span><span style="display:flex;"><span>				<span style="color:#a6e22e">t</span>, <span style="color:#a6e22e">ok</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rm</span>.<span style="color:#a6e22e">Body</span>.(<span style="color:#f92672">*</span><span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">Echo</span>)
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">if</span> !<span style="color:#a6e22e">ok</span> {
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;not an echo reply&#34;</span>)
+</span></span><span style="display:flex;"><span>					<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>				}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>				<span style="color:#75715e">// we skip if the response does not
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#75715e">// come from the target host
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">peer</span>.<span style="color:#a6e22e">String</span>() <span style="color:#f92672">!=</span> <span style="color:#a6e22e">targetHost</span> {
+</span></span><span style="display:flex;"><span>					<span style="color:#66d9ef">continue</span>
+</span></span><span style="display:flex;"><span>				}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>				<span style="color:#75715e">// store results in a map keyed by thesequence number
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#a6e22e">r</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">Result</span>{
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">IP</span>:            <span style="color:#a6e22e">peer</span>.<span style="color:#a6e22e">String</span>(),
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">HOP</span>:           <span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Seq</span>,
+</span></span><span style="display:flex;"><span>					<span style="color:#a6e22e">TimeElapsedMS</span>: float64(<span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>().<span style="color:#a6e22e">UnixNano</span>()<span style="color:#f92672">/</span><span style="color:#ae81ff">1000000</span>) <span style="color:#f92672">-</span> <span style="color:#a6e22e">startTime</span>,
+</span></span><span style="display:flex;"><span>				}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>				<span style="color:#75715e">// store the result
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>				<span style="color:#a6e22e">results</span>[<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Seq</span>] = <span style="color:#a6e22e">r</span>
+</span></span><span style="display:flex;"><span>			<span style="color:#f92672">...</span><span style="color:#a6e22e">snipped</span><span style="color:#f92672">...</span>
+</span></span></code></pre></div><p>In case of type <code>ipv4.ICMPTypeEchoReply</code> it means that possibly our target host answered us, but we’re not sure yet, since we possibly intercepted a packet coming from an unrelated network event. So, we first cast body of the message to an <code>icmp.Echo</code> type, then we check that the peer from which answer is coming is our target host. If not we just continue looping. In case answer from our target host we create a Result struct and we fill it with the source IP of the packet, the sequence number (more on this later) of the ICMPv4 EchoReply which tells us which HOP was in the route and the elapsed time in milliseconds since we started our program.</p>
+<p>In case we receive a <code>ipv4.ICMPTypeTimeExceeded</code> we’ve to do different things:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#66d9ef">case</span> <span style="color:#a6e22e">ipv4</span>.<span style="color:#a6e22e">ICMPTypeTimeExceeded</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// cast to icmp.TimeExceeded
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">t</span>, <span style="color:#a6e22e">ok</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">rm</span>.<span style="color:#a6e22e">Body</span>.(<span style="color:#f92672">*</span><span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">TimeExceeded</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> !<span style="color:#a6e22e">ok</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to cast to icmp.TimeExceeded&#34;</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// icmp.TimeExceeded contains the original packet
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#75715e">// so we grab IPv4 header and ICMP header
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">ipHdr</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">ParseIPv4Header</span>(<span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Data</span>)
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to parse IPv4 header&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// grab the ICMP header
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">icmpMsg</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">ParseMessage</span>(<span style="color:#ae81ff">1</span>, <span style="color:#a6e22e">t</span>.<span style="color:#a6e22e">Data</span>[<span style="color:#a6e22e">ipHdr</span>.<span style="color:#a6e22e">Len</span>:]); <span style="color:#a6e22e">err</span> <span style="color:#f92672">==</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">if</span> <span style="color:#a6e22e">msg</span>, <span style="color:#a6e22e">ok</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmpMsg</span>.<span style="color:#a6e22e">Body</span>.(<span style="color:#f92672">*</span><span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">Echo</span>); <span style="color:#a6e22e">ok</span> <span style="color:#f92672">&amp;&amp;</span> <span style="color:#a6e22e">id</span> <span style="color:#f92672">==</span> <span style="color:#a6e22e">msg</span>.<span style="color:#a6e22e">ID</span> {
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">r</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">Result</span>{
+</span></span><span style="display:flex;"><span>                <span style="color:#a6e22e">IP</span>:            <span style="color:#a6e22e">peer</span>.<span style="color:#a6e22e">String</span>(),
+</span></span><span style="display:flex;"><span>                <span style="color:#a6e22e">HOP</span>:           <span style="color:#a6e22e">msg</span>.<span style="color:#a6e22e">Seq</span>,
+</span></span><span style="display:flex;"><span>                <span style="color:#a6e22e">TimeElapsedMS</span>: float64(<span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>().<span style="color:#a6e22e">UnixNano</span>()<span style="color:#f92672">/</span><span style="color:#ae81ff">1000000</span>) <span style="color:#f92672">-</span> <span style="color:#a6e22e">startTime</span>,
+</span></span><span style="display:flex;"><span>            }
+</span></span><span style="display:flex;"><span>            <span style="color:#a6e22e">results</span>[<span style="color:#a6e22e">msg</span>.<span style="color:#a6e22e">Seq</span>] = <span style="color:#a6e22e">r</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    } <span style="color:#66d9ef">else</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to parse inner ICMPv4 message&#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>    }
+</span></span></code></pre></div><p>First we cast the body as we did before to the appropriate ICMPv4 message type, in this case <code>icmp.TimeExceeded</code>. What happens then? Well, in case of TimeExceeded the original datagram is appended starting from the ICMPv4 message body. So we’ve an IPv4 header followed by the original ICMPv4 message. We first use a facility offered by the icmp package to parse the IPv4 header, we’ll need its length in order to understand where the ICMPv4 payload starts after it. Then we use again our familiar <code>icmp.ParseMessage</code> function to get the original ICMPv4 message we sent. We check then that we can cast to <code>icmp.Echo</code> and in a positive case, if also the ID matches the one we assigned the original packet, we build a new <code>Result</code> structure filling it with necessary information as we did before.</p>
+<p>OK, now we miss last part of the puzzle of this dirty function. We’ve either received a reply from target or we incurred in some timeout because we got no response from it.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">...</span><span style="color:#a6e22e">snipped</span><span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// wait for the timer to expire
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#f92672">&lt;-</span><span style="color:#a6e22e">timer</span>.<span style="color:#a6e22e">C</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// print the results
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">for</span> <span style="color:#a6e22e">i</span> <span style="color:#f92672">:=</span> <span style="color:#ae81ff">1</span>; <span style="color:#a6e22e">i</span> <span style="color:#f92672">&lt;=</span> <span style="color:#a6e22e">maxTTL</span>; <span style="color:#a6e22e">i</span><span style="color:#f92672">++</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">r</span>, <span style="color:#a6e22e">ok</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">results</span>[<span style="color:#a6e22e">i</span>]; <span style="color:#a6e22e">ok</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%d\t%s\t%.2f ms\n&#34;</span>, <span style="color:#a6e22e">r</span>.<span style="color:#a6e22e">HOP</span>, <span style="color:#a6e22e">r</span>.<span style="color:#a6e22e">IP</span>, <span style="color:#a6e22e">r</span>.<span style="color:#a6e22e">TimeElapsedMS</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">r</span>.<span style="color:#a6e22e">IP</span> <span style="color:#f92672">==</span> <span style="color:#a6e22e">targetHost</span> {
+</span></span><span style="display:flex;"><span>				<span style="color:#66d9ef">break</span>
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		} <span style="color:#66d9ef">else</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Printf</span>(<span style="color:#e6db74">&#34;%d\t*\n&#34;</span>, <span style="color:#a6e22e">i</span>)
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">wg</span>.<span style="color:#a6e22e">Done</span>()
+</span></span></code></pre></div><p>In the code snippet above we block waiting for the timer to expire. In the former situation we print a message signaling that timeout has expired and proceed, in the latter we just proceed. The final part is quite trivial. We iterate keys of our <code>map[int]Result</code> starting from the minimum to the maximum TTL (that we equaled to sequence number in our main) and print the results. Since we expect our target host to be the last one in the route, after we match we just stop printing and we signal the main routine we are done.</p>
+<p>OK, now before we examine the main routine I’m going to show you a utility function we’re going to use to craft the packet we’re going to send:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">createICMPPacket</span>(<span style="color:#a6e22e">id</span> <span style="color:#66d9ef">int</span>, <span style="color:#a6e22e">seq</span> <span style="color:#66d9ef">int</span>) []<span style="color:#66d9ef">byte</span> {
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// Create a new ICMP message
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">m</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">Message</span>{
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">Type</span>: <span style="color:#a6e22e">ipv4</span>.<span style="color:#a6e22e">ICMPTypeEcho</span>, <span style="color:#a6e22e">Code</span>: <span style="color:#ae81ff">0</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">Body</span>: <span style="color:#f92672">&amp;</span><span style="color:#a6e22e">icmp</span>.<span style="color:#a6e22e">Echo</span>{
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">ID</span>: <span style="color:#a6e22e">id</span>, <span style="color:#a6e22e">Seq</span>: <span style="color:#a6e22e">seq</span>,
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">Data</span>: []byte(<span style="color:#e6db74">&#34;GO-ROUTE&#34;</span>),
+</span></span><span style="display:flex;"><span>		},
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// Marshal the message
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">b</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">m</span>.<span style="color:#a6e22e">Marshal</span>(<span style="color:#66d9ef">nil</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> <span style="color:#a6e22e">b</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>This function is pretty easy to understand, we create an <code>icmp.Message</code> of type <code>ICMPTypeEcho</code> and we assign to it an <code>icmp.Echo</code> body. The function assigns to the body a custom id and a sequence number that we’ll use to track at which position in the route is a host. We then invoke the <code>Marshall</code> method and return a slice of bytes.</p>
+<p>Finally our main routine:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#75715e">// create a custom identifier for the packets
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">id</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Getpid</span>() <span style="color:#f92672">&amp;</span> <span style="color:#ae81ff">0xffff</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// start time in milliseconds
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">startTime</span> <span style="color:#f92672">:=</span> float64(<span style="color:#a6e22e">time</span>.<span style="color:#a6e22e">Now</span>().<span style="color:#a6e22e">UnixNano</span>()) <span style="color:#f92672">/</span> <span style="color:#ae81ff">1000000</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">go</span> <span style="color:#a6e22e">waitResponses</span>(<span style="color:#a6e22e">c</span>, <span style="color:#f92672">*</span><span style="color:#a6e22e">timeout</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">startTime</span>, <span style="color:#a6e22e">remoteHost</span>.<span style="color:#a6e22e">IP</span>.<span style="color:#a6e22e">String</span>(), <span style="color:#f92672">*</span><span style="color:#a6e22e">maxHops</span>, <span style="color:#a6e22e">wg</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">for</span> <span style="color:#a6e22e">ttl</span> <span style="color:#f92672">:=</span> <span style="color:#ae81ff">1</span>; <span style="color:#a6e22e">ttl</span> <span style="color:#f92672">&lt;=</span> <span style="color:#f92672">*</span><span style="color:#a6e22e">maxHops</span>; <span style="color:#a6e22e">ttl</span><span style="color:#f92672">++</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#75715e">// Set the TTL
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">IPv4PacketConn</span>().<span style="color:#a6e22e">SetTTL</span>(<span style="color:#a6e22e">ttl</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to set TTL: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">continue</span>
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#75715e">// send N probes for each message
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#66d9ef">for</span> <span style="color:#a6e22e">i</span> <span style="color:#f92672">:=</span> <span style="color:#ae81ff">0</span>; <span style="color:#a6e22e">i</span> &lt; <span style="color:#f92672">*</span><span style="color:#a6e22e">probes</span>; <span style="color:#a6e22e">i</span><span style="color:#f92672">++</span> {
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>			<span style="color:#75715e">// Create an ICMP packet
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>			<span style="color:#a6e22e">b</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">createICMPPacket</span>(<span style="color:#a6e22e">id</span>, <span style="color:#a6e22e">ttl</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>			<span style="color:#75715e">// Send the packet
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>			<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">c</span>.<span style="color:#a6e22e">WriteTo</span>(<span style="color:#a6e22e">b</span>, <span style="color:#a6e22e">remoteHost</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>				<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#e6db74">&#34;failed to write packet: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>			}
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">wg</span>.<span style="color:#a6e22e">Wait</span>()
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">```
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">We first register the time we’re starting to send packets and generate a custom ICMPv4 ID for the packets based on our PID, we trim it to 16 bits since it is the maximum size it can fit into the field. Then based on the number of HOPs we want to probe we start iterating on TTL value. For each packet we’re going to send we set the TTL value on the connection, so, from `</span><span style="color:#ae81ff">1</span><span style="color:#e6db74">` to `</span><span style="color:#a6e22e">maxHops</span><span style="color:#e6db74">`. Then after TTL has being set we send a certain number of probes (specified from the command line) for each of its values, notice here how we use our `</span><span style="color:#a6e22e">createICMPPacket</span><span style="color:#e6db74">` function. The value of the sequence ID for each packet is equalized to the current TTL value we’re probing, finally we write the packet on the “wire”.
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">Lets try it:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">```</span><span style="color:#a6e22e">bash</span>
+</span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">$</span> <span style="color:#a6e22e">sudo</span> .<span style="color:#f92672">/</span><span style="color:#a6e22e">goroute</span> <span style="color:#f92672">-</span><span style="color:#a6e22e">host</span> <span style="color:#a6e22e">google</span>.<span style="color:#a6e22e">com</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">traceroute</span> <span style="color:#a6e22e">to</span> <span style="color:#a6e22e">google</span>.<span style="color:#a6e22e">com</span> (<span style="color:#ae81ff">216.58.209.46</span>), <span style="color:#ae81ff">30</span> <span style="color:#a6e22e">hops</span> <span style="color:#a6e22e">max</span>, <span style="color:#a6e22e">timeout</span> <span style="color:#ae81ff">2</span><span style="color:#a6e22e">s</span>, <span style="color:#a6e22e">start</span> <span style="color:#a6e22e">time</span> <span style="color:#ae81ff">2022</span><span style="color:#f92672">-</span><span style="color:#ae81ff">10</span><span style="color:#f92672">-</span><span style="color:#ae81ff">07</span><span style="color:#a6e22e">T13</span>:<span style="color:#ae81ff">52</span>:<span style="color:#ae81ff">12</span><span style="color:#f92672">+</span><span style="color:#ae81ff">02</span>:<span style="color:#ae81ff">00</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">1</span>	<span style="color:#ae81ff">192.168.1.1</span>	<span style="color:#ae81ff">4.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">2</span>	<span style="color:#f92672">*</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">3</span>	<span style="color:#ae81ff">172.18.1.254</span>	<span style="color:#ae81ff">10.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">4</span>	<span style="color:#ae81ff">172.18.0.72</span>	<span style="color:#ae81ff">10.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">5</span>	<span style="color:#ae81ff">172.19.184.160</span>	<span style="color:#ae81ff">16.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">6</span>	<span style="color:#ae81ff">172.19.177.40</span>	<span style="color:#ae81ff">18.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">7</span>	<span style="color:#ae81ff">172.19.177.8</span>	<span style="color:#ae81ff">33.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">8</span>	<span style="color:#ae81ff">195.22.192.144</span>	<span style="color:#ae81ff">35.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">9</span>	<span style="color:#ae81ff">72.14.198.6</span>	<span style="color:#ae81ff">31.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">10</span>	<span style="color:#ae81ff">209.85.254.219</span>	<span style="color:#ae81ff">33.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">11</span>	<span style="color:#ae81ff">108.170.232.181</span>	<span style="color:#ae81ff">36.19</span> <span style="color:#a6e22e">ms</span>
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">12</span>	<span style="color:#ae81ff">216.58.209.46</span>	<span style="color:#ae81ff">35.19</span> <span style="color:#a6e22e">ms</span>
+</span></span></code></pre></div><p>OK, now lets see how the original traceroute behaves:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ sudo traceroute -I google.com -n
+</span></span><span style="display:flex;"><span>traceroute to google.com <span style="color:#f92672">(</span>216.58.209.46<span style="color:#f92672">)</span>, <span style="color:#ae81ff">30</span> hops max, <span style="color:#ae81ff">60</span> byte packets
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">1</span>  192.168.1.1  1.228 ms  3.508 ms  3.504 ms
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">2</span>  * * *
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">3</span>  172.18.1.254  7.655 ms  12.169 ms  12.166 ms
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">4</span>  172.18.0.72  9.643 ms  9.640 ms  9.637 ms
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">5</span>  172.19.184.160  13.877 ms  15.833 ms  15.830 ms
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">6</span>  172.19.177.40  17.888 ms  16.643 ms  16.426 ms
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">7</span>  172.19.177.8  29.721 ms  31.447 ms  31.429 ms
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">8</span>  195.22.192.144  29.406 ms  29.403 ms  28.994 ms
+</span></span><span style="display:flex;"><span> <span style="color:#ae81ff">9</span>  72.14.198.6  24.729 ms  25.241 ms  25.318 ms
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">10</span>  209.85.254.219  26.997 ms  27.152 ms  27.147 ms
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">11</span>  108.170.232.181  30.354 ms  29.948 ms  30.173 ms
+</span></span><span style="display:flex;"><span><span style="color:#ae81ff">12</span>  216.58.209.46  30.301 ms  30.295 ms  30.293 ms
+</span></span></code></pre></div><p>Awesome! We did not miss any host! That’s great!</p>
+<p>In conclusion this article just demonstrated how to write a simple traceroute tool in Go. Of course readers are encouraged to check the original <a href="https://man7.org/linux/man-pages/man8/traceroute.8.html">traceroute(8)</a> – Linux manual page and explore further. What we did here is a very simple and naive version and the original tool has really tons of optimization and mode of operations. For example we used ICMPv4 packets to probe. But the original traceroute program is able to use half-open TCP connections and UDP connections too.</p>
+
+      </div>
+    </article>
+
+    <hr />
+
+    <div class="post-info">
+      
+    <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-tag meta-icon"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7" y2="7"></line></svg>
+
+        <span class="tag"><a href="https://example.org/tags/linux/">linux</a></span>
+        <span class="tag"><a href="https://example.org/tags/security/">security</a></span>
+        <span class="tag"><a href="https://example.org/tags/programming/">programming</a></span>
+        <span class="tag"><a href="https://example.org/tags/go/">go</a></span>
+        <span class="tag"><a href="https://example.org/tags/golang/">golang</a></span>
+        <span class="tag"><a href="https://example.org/tags/applications/">applications</a></span>
+        
+    </p>
+
+      
+    <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-folder meta-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+
+        <span class="tag"><a href="https://example.org/categories/security/">security</a></span>
+        <span class="tag"><a href="https://example.org/categories/networking/">networking</a></span>
+        
+    </p>
+
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file-text">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        2476 Words
+      </p>
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-calendar">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        
+          2022-11-08 01:00
+        
+
+         
+          
+        
+      </p>
+    </div>
+
+    
+    <div class="pagination">
+        
+
+        <div class="pagination__buttons">
+            
+            <span class="button previous">
+                <a href="https://example.org/posts/09-books-2022/">
+                    <span class="button__icon">←</span>
+                    <span class="button__text">Books list 2022</span>
+                </a>
+            </span>
+            
+
+            
+            <span class="button next">
+                <a href="https://example.org/posts/02-libfuzzer/">
+                    <span class="button__text">Build a simple fuzzer with libFuzzer</span>
+                    <span class="button__icon">→</span>
+                </a>
+            </span>
+            
+        </div>
+    </div>
+
+
+    
+
+    
+
+    
+
+  </main>
+
+            </div>
+
+            
+                <footer class="footer">
+    
+    
+</footer>
+
+            
+        </div>
+
+        
+
+
+
+<script type="text/javascript" src="/bundle.min.85fad2de4f13fec3bcb3b3cb10430cdb44a7b4a9749b32938241a5c6e77718df7624f1002b880521fdc26e24ec1077fda214bf1cb36ee3045510760d09638cae.js" integrity="sha512-hfrS3k8T/sO8s7PLEEMM20SntKl0mzKTgkGlxud3GN92JPEAK4gFIf3CbiTsEHf9ohS/HLNu4wRVEHYNCWOMrg=="></script>
+
+
+
+
+    </body>
+</html>

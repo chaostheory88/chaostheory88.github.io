@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Series on 0xcf9</title>
+    <link>https://example.org/categories/series/</link>
+    <description>Recent content in Series on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Tue, 17 Jan 2023 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://example.org/categories/series/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Intro to Seccomp</title>
+      <link>https://example.org/posts/12-seccomp-2023/</link>
+      <pubDate>Tue, 17 Jan 2023 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/12-seccomp-2023/</guid>
+      <description>Whenever we run a program on our machine, it runs with the same privileges as the user that started it. This is a problem, because it means that if we run a program that has a bug in it, if exploited, that bug can be used to compromise the whole machine. This is why it is important to run programs with the least amount of privileges possible.&#xA;One way to do this is to use a sandbox.</description>
+    </item>
+  </channel>
+</rss>

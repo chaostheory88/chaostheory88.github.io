@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Landlock on 0xcf9</title>
+    <link>https://example.org/categories/landlock/</link>
+    <description>Recent content in Landlock on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Tue, 25 Jul 2023 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://example.org/categories/landlock/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Intro to Landlock</title>
+      <link>https://example.org/posts/11-landlock-2023/</link>
+      <pubDate>Tue, 25 Jul 2023 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/11-landlock-2023/</guid>
+      <description>In a previous article we shown up how it is possible to make our applications more secure through the use of seccomp which allows us to restrict the syscalls that a process or a thread can invoke. In this article we will see how to use Landlock LSM to further improve the security of our applications.&#xA;Introduction: What&amp;rsquo;s Landlock? Landlock is a Linux security module that allows to restrict the access to the filesystem.</description>
+    </item>
+  </channel>
+</rss>

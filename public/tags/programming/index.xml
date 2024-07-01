@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Programming on 0xcf9</title>
+    <link>https://example.org/tags/programming/</link>
+    <description>Recent content in Programming on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Tue, 08 Nov 2022 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://example.org/tags/programming/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Writing a simple Traceroute in Go</title>
+      <link>https://example.org/posts/13-traceroute-2022/</link>
+      <pubDate>Tue, 08 Nov 2022 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/13-traceroute-2022/</guid>
+      <description>If your question is why, the answer is quite simple: why not? And by the way, my favorite question is: how?&#xA;So, how does a traceroute program works in general? (In this post we&amp;rsquo;re considering traceroute in IPv4 networks)&#xA;Well, basically traceroute exploits a very simple concept. It sends IPv4 packets starting with TTL = 1 to a remote host, continues incrementing it and expects back ICMPv4 TimeExceeded packets from intermediary hosts or an ICMPv4 EchoReply from the destination one.</description>
+    </item>
+  </channel>
+</rss>

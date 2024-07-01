@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="author" content="">
+<meta name="description" content="Whenever we run a program on our machine, it runs with the same privileges as the user that started it. This is a problem, because it means that if we run a program that has a bug in it, if exploited, that bug can be used to compromise the whole machine. This is why it is important to run programs with the least amount of privileges possible.
+One way to do this is to use a sandbox." />
+<meta name="keywords" content=", linux, security, applications" />
+<meta name="robots" content="noodp" />
+<meta name="theme-color" content="" />
+<link rel="canonical" href="https://example.org/posts/12-seccomp-2023/" />
+
+
+    <title>
+        
+            Intro to Seccomp :: 0xcf9 
+        
+    </title>
+
+
+
+
+
+<link rel="stylesheet" href="/main.949191c1dcc9c4a887997048b240354e47152016d821198f89448496ba42e491.css" integrity="sha256-lJGRwdzJxKiHmXBIskA1TkcVIBbYIRmPiUSElrpC5JE=">
+
+
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <meta name="msapplication-TileColor" content="">
+
+
+
+  <meta itemprop="name" content="Intro to Seccomp">
+  <meta itemprop="description" content="Whenever we run a program on our machine, it runs with the same privileges as the user that started it. This is a problem, because it means that if we run a program that has a bug in it, if exploited, that bug can be used to compromise the whole machine. This is why it is important to run programs with the least amount of privileges possible.
+One way to do this is to use a sandbox.">
+  <meta itemprop="datePublished" content="2023-01-17T00:00:00+00:00">
+  <meta itemprop="dateModified" content="2023-01-17T00:00:00+00:00">
+  <meta itemprop="wordCount" content="5237">
+  <meta itemprop="keywords" content="Linux,Security,Applications">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="Intro to Seccomp">
+<meta name="twitter:description" content="Whenever we run a program on our machine, it runs with the same privileges as the user that started it. This is a problem, because it means that if we run a program that has a bug in it, if exploited, that bug can be used to compromise the whole machine. This is why it is important to run programs with the least amount of privileges possible.
+One way to do this is to use a sandbox.">
+
+
+
+
+
+    <meta property="article:section" content="security" />
+
+    <meta property="article:section" content="series" />
+
+
+
+    <meta property="article:published_time" content="2023-01-17 00:00:00 &#43;0000 UTC" />
+
+
+
+
+
+
+
+
+
+
+
+    </head>
+
+    
+        <body>
+    
+    
+        <div class="container">
+            <header class="header">
+    <span class="header__inner">
+        <a href="/" style="text-decoration: none;">
+    <div class="logo">
+        
+            <span class="logo__mark">></span>
+            <span class="logo__text ">
+                hello</span>
+            <span class="logo__cursor" style=
+                  "
+                   
+                   ">
+            </span>
+        
+    </div>
+</a>
+
+
+        <span class="header__right">
+            
+                <nav class="menu">
+    <ul class="menu__inner"><li><a href="/posts/">Posts</a></li><li><a href="/tags/">Tags</a></li>
+    </ul>
+</nav>
+
+                <span class="menu-trigger">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M0 0h24v24H0z" fill="none"/>
+                        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                    </svg>
+                </span>
+            
+        </span>
+    </span>
+</header>
+
+
+            <div class="content">
+                
+  <main class="post">
+
+    <div class="post-info">
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-clock">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        25 minutes
+
+        
+      </p>
+    </div>
+
+    <article>
+      <h1 class="post-title">
+        <a href="https://example.org/posts/12-seccomp-2023/">Intro to Seccomp</a>
+      </h1>
+
+      
+
+      
+
+      
+
+      <div class="post-content">
+        <p>Whenever we run a program on our machine, it runs with the same privileges as the user that started it. This is a problem, because it means that if we run a program that has a bug in it, if exploited, that bug can be used to compromise the whole machine. This is why it is important to run programs with the least amount of privileges possible.</p>
+<p>One way to do this is to use a sandbox. A sandbox is a program that runs another program, but with a limited set of privileges. This is a good way to run untrusted code, because if the untrusted code exploits a bug, it can only do so much damage. The sandbox can also be used to limit the resources that the untrusted code can use, such as the amount of memory it can use, or the amount of CPU time it can use.</p>
+<h2 id="what-is-seccomp">What is Seccomp?</h2>
+<p>On Linux and in general on other operating systems too, a program invokes system calls in order to request services from the operating system. For example, if a program wants to read a file, it will make a system call to the operating system to do so. If a program wants to open a socket, it will make a system call to the operating system to do so. If a program wants to print something to the screen, it will make a system call to the operating system to do so.</p>
+<p>A program which presents a bug that allows an attacker to divert the program’s control flow to an attacker-controlled location is called a “code injection” vulnerability. This is a very serious vulnerability, because it means that the attacker can run arbitrary code on the machine. This is why it is important to run programs with the least amount of privileges possible. An attacker can then use such a vulnerability to invoke system calls that the program would have not been able to invoke, and thus make the program do things that it would not have been able to do otherwise.</p>
+<p>Quoting the <a href="https://man7.org/linux/man-pages/man2/seccomp.2.html">seccomp</a> Linux man pages:</p>
+<pre tabindex="0"><code>The seccomp() system call operates on the Secure Computing (seccomp) state of the calling process.
+</code></pre><p>Seccomp is a Linux kernel feature that allows a program to limit the set of system calls that it can invoke. Suppose that we
+have a program that needs to read a file, but we don’t want it to be able to open a socket. We can use Seccomp to tell the kernel that the program is only allowed to invoke the read system call, and not the socket system call. If the program tries to invoke the socket system call, the kernel will return an error to the program, and the program will be terminated.</p>
+<h2 id="how-does-seccomp-work">How does Seccomp work?</h2>
+<p>Seccomp utilizes <a href="https://en.wikipedia.org/wiki/Berkeley_Packet_Filter">BPF</a> (Berkeley Packet Filter) to filter system calls. BPF is a bytecode-based virtual machine that is used to filter packets in the Linux kernel. Seccomp uses BPF to filter system calls. The BPF program is executed by the kernel every time a system call is invoked. The BPF program can then decide whether to allow the system call or not. Notice that the BPF program is jited by the kernel if <code>CONFIG_BPF_JIT</code> is enabled. This means that it gets translated into machine code, and thus it runs very fast.</p>
+<h2 id="how-to-use-seccomp">How to use Seccomp?</h2>
+<p>Following is the signature of the seccomp system call:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">seccomp</span>(<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span> operation, <span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span> flags, <span style="color:#66d9ef">void</span> <span style="color:#f92672">*</span>args);
+</span></span></code></pre></div><p>The operation argument specifies the operation to perform. The flags argument specifies the flags to use. The args argument specifies the arguments to use.</p>
+<p>The operation argument we’re interested in is <code>SECCOMP_SET_MODE_FILTER</code>. This operation sets the seccomp filter for the calling process. We’re going to ignore the flags for now and focus on the args argument.</p>
+<p>The args argument is a pointer to a <code>struct sock_fprog</code> structure. This structure contains a pointer to a BPF program, and the length of the BPF program. The BPF program is an array of <code>struct sock_filter</code> structures. Each <code>struct sock_filter</code> structure contains a BPF instruction.</p>
+<p>When our program executes a syscall the kernel uses as an argument to the BPF program a pointer to a <code>struct seccomp_data</code> structure. This structure contains information about the system call that is being invoked. The BPF program can use this information to decide whether to allow the system call or not.</p>
+<p>The <code>struct seccomp_data</code> structure has the following fields:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#66d9ef">struct</span> seccomp_data {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">int</span> nr;                     <span style="color:#75715e">/* System call number */</span>
+</span></span><span style="display:flex;"><span>    __u32 arch;                 <span style="color:#75715e">/* AUDIT_ARCH_* value */</span>
+</span></span><span style="display:flex;"><span>    __u64 instruction_pointer;  <span style="color:#75715e">/* Instruction pointer */</span>
+</span></span><span style="display:flex;"><span>    __u64 args[<span style="color:#ae81ff">6</span>];              <span style="color:#75715e">/* Arguments to the system call */</span>
+</span></span><span style="display:flex;"><span>};
+</span></span></code></pre></div><p>The nr field contains the system call number. The <code>arch</code> field contains the architecture of the system call. The <code>instruction_pointer</code> field contains the instruction pointer of the system call. The args field contains the arguments to the system call.</p>
+<p>The <code>seccomp</code> manual suggest to verify the architecture of the system call before allowing it. This is done by checking the arch field of the <code>struct seccomp_data</code> structure. If the architecture is not the one we expect, we can kill the process by returning <code>SECCOMP_RET_KILL</code> from the BPF program. This is because based on the architecture syscall numbers are different. For example, the <code>read</code> system call on <code>x86</code> has a syscall number of <code>3</code>, but on <code>x86_64</code> it has a syscall number of <code>0</code>. If we don’t check the architecture, we might allow the read system call on <code>x86</code>, but not on <code>x86_64</code>, and vice versa.</p>
+<p>Bare also in mind that multiple filters can be installed. Filters are executed in reverse order in regards to their addition. This means that the last filter added will be executed first.</p>
+<h2 id="example-1--allow-only-the-read-system-call">Example 1 – Allow only the read system call</h2>
+<p>In the following example we’re going to allow only the <code>read</code> system call. We’re going to use the <code>SECCOMP_RET_ALLOW</code> action to allow the system call, and the <code>SECCOMP_RET_KILL</code> action to kill the process if the system call is not allowed. This first example will use the raw seccomp system call. We’ll see later that we can use libseccomp to make this easier.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;linux/audit.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;linux/filter.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;linux/seccomp.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;linux/unistd.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;stddef.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;sys/prctl.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;sys/syscall.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;unistd.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;stdio.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// This is a buffer that we will read into.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">char</span> buf[<span style="color:#ae81ff">32</span>];
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> sock_filter filter[] <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Load architecture into accumulator register. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_LD <span style="color:#f92672">|</span> BPF_W <span style="color:#f92672">|</span> BPF_ABS, (<span style="color:#a6e22e">offsetof</span>(<span style="color:#66d9ef">struct</span> seccomp_data, arch))),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Check if the architecture is x86_64. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_JUMP</span>(BPF_JMP <span style="color:#f92672">|</span> BPF_JEQ <span style="color:#f92672">|</span> BPF_K, AUDIT_ARCH_X86_64, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">0</span>),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Kill the process if architecture does not match*/</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_RET <span style="color:#f92672">|</span> BPF_K, SECCOMP_RET_KILL),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Load the system call number. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_LD <span style="color:#f92672">|</span> BPF_W <span style="color:#f92672">|</span> BPF_ABS, (<span style="color:#a6e22e">offsetof</span>(<span style="color:#66d9ef">struct</span> seccomp_data, nr))),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Check if the system call is `read`. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_JUMP</span>(BPF_JMP <span style="color:#f92672">|</span> BPF_JEQ <span style="color:#f92672">|</span> BPF_K, __NR_read, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">1</span>),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Allow the system call. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_RET <span style="color:#f92672">|</span> BPF_K, SECCOMP_RET_ALLOW),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Kill the process. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_RET <span style="color:#f92672">|</span> BPF_K, SECCOMP_RET_KILL),
+</span></span><span style="display:flex;"><span>    };
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> sock_fprog prog <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>        .len <span style="color:#f92672">=</span> (<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">short</span>)(<span style="color:#66d9ef">sizeof</span>(filter) <span style="color:#f92672">/</span> <span style="color:#66d9ef">sizeof</span>(filter[<span style="color:#ae81ff">0</span>])),
+</span></span><span style="display:flex;"><span>        .filter <span style="color:#f92672">=</span> filter,
+</span></span><span style="display:flex;"><span>    };
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">prctl</span>(PR_SET_NO_NEW_PRIVS, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>) <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">0</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">perror</span>(<span style="color:#e6db74">&#34;prctl(PR_SET_NO_NEW_PRIVS) failed&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">prctl</span>(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, <span style="color:#f92672">&amp;</span>prog) <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">0</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">perror</span>(<span style="color:#e6db74">&#34;prctl(PR_SET_SECCOMP) failed&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">read</span>(<span style="color:#ae81ff">0</span>, buf, <span style="color:#ae81ff">4</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// after read this program will fail...
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Before executing let’s break down previous code and see what it does. First we create a BPF program. The BPF program is an array of <code>struct sock_filter</code> structures. Each struct sock_filter structure contains a BPF instruction.</p>
+<p>In order to write the program in an “high level representation” we use some macros available in the <code>linux/filter.h</code> header file. The <code>BPF_STMT</code> macro is used to create a <code>struct sock_filter</code> structure from a BPF instruction which represents a statement, in this case a load operation. The <code>BPF_JUMP</code> macro is used to create a <code>struct sock_filter</code> structure from BPF instruction which represents a jump.</p>
+<p>For example:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#a6e22e">BPF_STMT</span>(BPF_LD <span style="color:#f92672">|</span> BPF_W <span style="color:#f92672">|</span> BPF_ABS, (<span style="color:#a6e22e">offsetof</span>(<span style="color:#66d9ef">struct</span> seccomp_data, arch))),
+</span></span></code></pre></div><p>This instruction loads the architecture of the system call into the accumulator register. The <code>BPF_LD</code> macro is used to specify that this is a load operation. The <code>BPF_W</code> macro is used to specify that the load operation is a 32-bit load operation. The <code>BPF_ABS</code> macro is used to specify that the load operation is an absolute load operation. The <code>offsetof(struct seccomp_data, arch)</code> macro is used to specify the offset of the arch field of the <code>struct seccomp_data</code> structure.</p>
+<p>A <code>struct sock_filter</code> structure contains the following fields:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#66d9ef">struct</span> sock_filter {
+</span></span><span style="display:flex;"><span>    __u16 code;     <span style="color:#75715e">/* Actual filter code */</span>
+</span></span><span style="display:flex;"><span>    __u8 jt;        <span style="color:#75715e">/* Jump true */</span>
+</span></span><span style="display:flex;"><span>    __u8 jf;        <span style="color:#75715e">/* Jump false */</span>
+</span></span><span style="display:flex;"><span>    __u32 k;        <span style="color:#75715e">/* Generic multiuse field */</span>
+</span></span><span style="display:flex;"><span>};
+</span></span></code></pre></div><p>If we should translate the <code>sock_filter[]</code> array above to BPF instructions it would look like this:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>ld [<span style="color:#ae81ff">4</span>]                      <span style="color:#960050;background-color:#1e0010">#</span> Load the architecture of the system call into the accumulator <span style="color:#66d9ef">register</span>.
+</span></span><span style="display:flex;"><span>jeq <span style="color:#960050;background-color:#1e0010">#</span><span style="color:#ae81ff">0xc000003e</span>, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">0</span>       <span style="color:#960050;background-color:#1e0010">#</span> Check <span style="color:#66d9ef">if</span> the architecture is x86_64.
+</span></span><span style="display:flex;"><span>ret <span style="color:#960050;background-color:#1e0010">#</span><span style="color:#ae81ff">0x00000000</span>             <span style="color:#960050;background-color:#1e0010">#</span> Kill the process <span style="color:#66d9ef">if</span> architecture does not match.
+</span></span><span style="display:flex;"><span>ld [<span style="color:#ae81ff">0</span>]                      <span style="color:#960050;background-color:#1e0010">#</span> Load the system call number.
+</span></span><span style="display:flex;"><span>jeq <span style="color:#960050;background-color:#1e0010">#</span><span style="color:#ae81ff">0x00000000</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">1</span>       <span style="color:#960050;background-color:#1e0010">#</span> Check <span style="color:#66d9ef">if</span> the system call is <span style="color:#960050;background-color:#1e0010">`</span>read<span style="color:#960050;background-color:#1e0010">`</span>.
+</span></span><span style="display:flex;"><span>ret <span style="color:#960050;background-color:#1e0010">#</span><span style="color:#ae81ff">0x7fff0000</span>             <span style="color:#960050;background-color:#1e0010">#</span> Allow the system call.
+</span></span><span style="display:flex;"><span>ret <span style="color:#960050;background-color:#1e0010">#</span><span style="color:#ae81ff">0x00000000</span>             <span style="color:#960050;background-color:#1e0010">#</span> Kill the process.
+</span></span></code></pre></div><p>After we created the <code>sock_filter[]</code> array we create a <code>struct sock_fprog</code> structure. The <code>struct sock_fprog</code> structure contains the following fields:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#66d9ef">struct</span> sock_fprog {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">short</span> len;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> sock_filter <span style="color:#f92672">*</span>filter;
+</span></span><span style="display:flex;"><span>};
+</span></span></code></pre></div><p>The <code>len</code> field contains the number of BPF instructions in the <code>filter</code> field. The <code>filter</code> field contains a pointer to the BPF instructions.</p>
+<p>We then invoke a <code>prctl(2)</code> syscall to set the <code>NO_NEW_PRIVS</code> flag. The <code>NO_NEW_PRIVS</code> flag prevents the process from gaining new privileges. Then with another <code>prctl(2)</code> syscall we set the seccomp filter. The <code>SECCOMP_MODE_FILTER</code> flag specifies that we want to set a seccomp filter. The &amp;prog argument specifies the BPF program that we want to use.</p>
+<p>Since we allowed the <code>read(2)</code> syscall we try to use it just after we set the seccomp filter. Then if you read the code above carefully I’ve left a comment telling that the program will fail to return 0 just after the read syscall.</p>
+<p>Let’s see what happens, first we compile the program:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">$</span> gcc <span style="color:#f92672">-</span>o example_1 example_1.c
+</span></span></code></pre></div><p>Then we run it:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>.<span style="color:#f92672">/</span>example_1
+</span></span><span style="display:flex;"><span>aaaa
+</span></span><span style="display:flex;"><span>fish: Job <span style="color:#ae81ff">1</span>, <span style="color:#960050;background-color:#1e0010">&#39;</span>.<span style="color:#f92672">/</span>example_1<span style="color:#960050;background-color:#1e0010">&#39;</span> terminated by signal <span style="color:#a6e22e">SIGSYS</span> (Bad system call)
+</span></span></code></pre></div><p>As you can see the program failed with a <code>SIGSYS</code> signal. Despite we were able to read 4 bytes from the standard input the program failed. Lets <code>strace</code> the program:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>...snip...
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">prctl</span>(PR_SET_NO_NEW_PRIVS, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>)  <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">prctl</span>(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, {len<span style="color:#f92672">=</span><span style="color:#ae81ff">7</span>, filter<span style="color:#f92672">=</span><span style="color:#ae81ff">0x7fffd3c68b40</span>}) <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">read</span>(<span style="color:#ae81ff">0</span>, aaaa
+</span></span><span style="display:flex;"><span><span style="color:#e6db74">&#34;aaa&#34;</span>, <span style="color:#ae81ff">3</span>)                       <span style="color:#f92672">=</span> <span style="color:#ae81ff">3</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">exit_group</span>(<span style="color:#ae81ff">0</span>)                           <span style="color:#f92672">=</span> <span style="color:#ae81ff">231</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">+++</span> killed by <span style="color:#a6e22e">SIGSYS</span> (core dumped) <span style="color:#f92672">+++</span>
+</span></span><span style="display:flex;"><span>fish: Job <span style="color:#ae81ff">1</span>, <span style="color:#960050;background-color:#1e0010">&#39;</span>strace .<span style="color:#f92672">/</span>example_1<span style="color:#960050;background-color:#1e0010">&#39;</span> terminated by signal <span style="color:#a6e22e">SIGSYS</span> (Bad system call)
+</span></span></code></pre></div><p>It seems our program is failing right after the <code>read(2)</code> syscall. That’s because our BPF program allows just the <code>read(2)</code>syscall, but of course a program to terminate itself needs to call <code>exit_group(2)</code> syscall. So we need to allow the <code>exit_group(2)</code> syscall too. Let’s modify our BPF program:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;linux/filter.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;linux/seccomp.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;linux/unistd.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;stddef.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;stdio.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;sys/prctl.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;sys/syscall.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;unistd.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">main</span>(<span style="color:#66d9ef">void</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">char</span> buf[<span style="color:#ae81ff">4</span>];
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> sock_filter filter[] <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Load architecture. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_LD <span style="color:#f92672">|</span> BPF_W <span style="color:#f92672">|</span> BPF_ABS, (<span style="color:#a6e22e">offsetof</span>(<span style="color:#66d9ef">struct</span> seccomp_data, arch))),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Check if architecture is x86_64. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_JUMP</span>(BPF_JMP <span style="color:#f92672">|</span> BPF_JEQ <span style="color:#f92672">|</span> BPF_K, AUDIT_ARCH_X86_64, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">0</span>),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Kill the process if architecture does not match. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_RET <span style="color:#f92672">|</span> BPF_K, SECCOMP_RET_KILL),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Load system call number. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_LD <span style="color:#f92672">|</span> BPF_W <span style="color:#f92672">|</span> BPF_ABS, (<span style="color:#a6e22e">offsetof</span>(<span style="color:#66d9ef">struct</span> seccomp_data, nr))),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Check if system call is read. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_JUMP</span>(BPF_JMP <span style="color:#f92672">|</span> BPF_JEQ <span style="color:#f92672">|</span> BPF_K, __NR_read, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">1</span>),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Allow the system call. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_RET <span style="color:#f92672">|</span> BPF_K, SECCOMP_RET_ALLOW),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Check if system call is exit_group. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_JUMP</span>(BPF_JMP <span style="color:#f92672">|</span> BPF_JEQ <span style="color:#f92672">|</span> BPF_K, __NR_exit_group, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">1</span>),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Allow the system call. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_RET <span style="color:#f92672">|</span> BPF_K, SECCOMP_RET_ALLOW),
+</span></span><span style="display:flex;"><span>        <span style="color:#75715e">/* Kill the process. */</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">BPF_STMT</span>(BPF_RET <span style="color:#f92672">|</span> BPF_K, SECCOMP_RET_KILL),
+</span></span><span style="display:flex;"><span>    };
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">struct</span> sock_fprog prog <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>        .len <span style="color:#f92672">=</span> (<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">short</span>)(<span style="color:#66d9ef">sizeof</span>(filter) <span style="color:#f92672">/</span> <span style="color:#66d9ef">sizeof</span>(filter[<span style="color:#ae81ff">0</span>])),
+</span></span><span style="display:flex;"><span>        .filter <span style="color:#f92672">=</span> filter,
+</span></span><span style="display:flex;"><span>    };
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">prctl</span>(PR_SET_NO_NEW_PRIVS, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>) <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">0</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">perror</span>(<span style="color:#e6db74">&#34;prctl(PR_SET_NO_NEW_PRIVS) failed&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">prctl</span>(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, <span style="color:#f92672">&amp;</span>prog) <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">0</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">perror</span>(<span style="color:#e6db74">&#34;prctl(PR_SET_SECCOMP) failed&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">read</span>(<span style="color:#ae81ff">0</span>, buf, <span style="color:#ae81ff">4</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Now if we strace again our program we can see that it is able to read 4 bytes from the standard input and then it terminates correctly:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span>...snip...
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">prctl</span>(PR_SET_NO_NEW_PRIVS, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>)  <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">prctl</span>(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, {len<span style="color:#f92672">=</span><span style="color:#ae81ff">9</span>, filter<span style="color:#f92672">=</span><span style="color:#ae81ff">0x7ffe48c7a070</span>}) <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">read</span>(<span style="color:#ae81ff">0</span>, aaaa
+</span></span><span style="display:flex;"><span><span style="color:#e6db74">&#34;aaaa&#34;</span>, <span style="color:#ae81ff">4</span>)                      <span style="color:#f92672">=</span> <span style="color:#ae81ff">4</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">exit_group</span>(<span style="color:#ae81ff">0</span>)                           <span style="color:#f92672">=</span> <span style="color:#f92672">?</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">+++</span> exited with <span style="color:#ae81ff">0</span> <span style="color:#f92672">+++</span>
+</span></span></code></pre></div><p>So here’s a quicktip, man pages for <code>seccomp(2)</code> suggest to define a white lists of syscalls instead of a black list. This is because a black list can be easily miss some syscalls and this can lead to a security issue. So if you want to use a seccomp filter I suggest to use a white list instead of a black list. Of course to use a white list you need to know all the syscalls that you need to allow. This is not always easy, but if you are writing a program that needs to use a seccomp filter you could use strace to find out all the syscalls that your program needs to use.</p>
+<p>For example the following <code>strace</code> command can be used to find out all the syscalls that the <code>ls</code> command needs to use:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>strace -c ls
+</span></span><span style="display:flex;"><span>...snip...
+</span></span><span style="display:flex;"><span>% time     seconds  usecs/call     calls    errors syscall
+</span></span><span style="display:flex;"><span>------ ----------- ----------- --------- --------- ----------------
+</span></span><span style="display:flex;"><span> 22.82    0.000034           <span style="color:#ae81ff">1</span>        <span style="color:#ae81ff">22</span>           mmap
+</span></span><span style="display:flex;"><span> 13.42    0.000020           <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">8</span>           mprotect
+</span></span><span style="display:flex;"><span> 10.07    0.000015           <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">7</span>           openat
+</span></span><span style="display:flex;"><span>  6.71    0.000010           <span style="color:#ae81ff">5</span>         <span style="color:#ae81ff">2</span>           getdents64
+</span></span><span style="display:flex;"><span>  6.04    0.000009           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">9</span>           close
+</span></span><span style="display:flex;"><span>  6.04    0.000009           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">8</span>           newfstatat
+</span></span><span style="display:flex;"><span>  4.70    0.000007           <span style="color:#ae81ff">7</span>         <span style="color:#ae81ff">1</span>           munmap
+</span></span><span style="display:flex;"><span>  4.70    0.000007           <span style="color:#ae81ff">3</span>         <span style="color:#ae81ff">2</span>           statfs
+</span></span><span style="display:flex;"><span>  4.70    0.000007           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">6</span>         <span style="color:#ae81ff">4</span> prctl
+</span></span><span style="display:flex;"><span>  2.68    0.000004           <span style="color:#ae81ff">4</span>         <span style="color:#ae81ff">1</span>           write
+</span></span><span style="display:flex;"><span>  2.68    0.000004           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">3</span>           brk
+</span></span><span style="display:flex;"><span>  2.68    0.000004           <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">2</span>           ioctl
+</span></span><span style="display:flex;"><span>  2.01    0.000003           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">2</span>           pread64
+</span></span><span style="display:flex;"><span>  2.01    0.000003           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">1</span> access
+</span></span><span style="display:flex;"><span>  1.34    0.000002           <span style="color:#ae81ff">0</span>         <span style="color:#ae81ff">4</span>           read
+</span></span><span style="display:flex;"><span>  1.34    0.000002           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">1</span> arch_prctl
+</span></span><span style="display:flex;"><span>  1.34    0.000002           <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">1</span>           set_tid_address
+</span></span><span style="display:flex;"><span>  1.34    0.000002           <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">1</span>           set_robust_list
+</span></span><span style="display:flex;"><span>  1.34    0.000002           <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">1</span>           prlimit64
+</span></span><span style="display:flex;"><span>  1.34    0.000002           <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">1</span>           rseq
+</span></span><span style="display:flex;"><span>  0.67    0.000001           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">1</span>           getrandom
+</span></span><span style="display:flex;"><span>  0.00    0.000000           <span style="color:#ae81ff">0</span>         <span style="color:#ae81ff">1</span>           execve
+</span></span><span style="display:flex;"><span>------ ----------- ----------- --------- --------- ----------------
+</span></span><span style="display:flex;"><span>100.00    0.000149           <span style="color:#ae81ff">1</span>        <span style="color:#ae81ff">87</span>         <span style="color:#ae81ff">6</span> total
+</span></span></code></pre></div><p>Of course while analyzing the output of <code>strace</code> you need to take into account that some syscalls are used by dynamic loader.Since the dynamic loader at some point passes the control to the main of your program you should allow just syscalls that your program makes use after the seccomp filter is set.</p>
+<h2 id="using-libseccomp">Using libseccomp</h2>
+<p>You may have noticed that the code of the previous example is quite verbose. To make the code more readable and to avoid some errors you can use the <code>libseccomp</code> library. The <code>libseccomp</code> library provides a high level API to set a seccomp filter. The following example is the same as the previous one but it uses the <code>libseccomp</code> library:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;stdio.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;stdlib.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;unistd.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;seccomp.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">#include</span> <span style="color:#75715e">&lt;sys/prctl.h&gt;</span><span style="color:#75715e">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">int</span> <span style="color:#a6e22e">main</span>(<span style="color:#66d9ef">int</span> argc, <span style="color:#66d9ef">char</span> <span style="color:#f92672">*</span>argv[])
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    scmp_filter_ctx ctx;
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">char</span> buf[<span style="color:#ae81ff">4</span>];
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// set no_new_privs
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">prctl</span>(PR_SET_NO_NEW_PRIVS, <span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>, <span style="color:#ae81ff">0</span>) <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">0</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">perror</span>(<span style="color:#e6db74">&#34;prctl failed&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>   <span style="color:#75715e">// Create a new seccomp filter context. 
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    ctx <span style="color:#f92672">=</span> <span style="color:#a6e22e">seccomp_init</span>(SCMP_ACT_KILL);
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (ctx <span style="color:#f92672">==</span> NULL) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">perror</span>(<span style="color:#e6db74">&#34;seccomp_init failed&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Add the syscalls that we want to allow to the seccomp filter context.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">seccomp_rule_add</span>(ctx, SCMP_ACT_ALLOW, <span style="color:#a6e22e">SCMP_SYS</span>(read), <span style="color:#ae81ff">0</span>) <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">0</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">perror</span>(<span style="color:#e6db74">&#34;seccomp_rule_add failed&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">seccomp_rule_add</span>(ctx, SCMP_ACT_ALLOW, <span style="color:#a6e22e">SCMP_SYS</span>(exit_group), <span style="color:#ae81ff">0</span>) <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">0</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">perror</span>(<span style="color:#e6db74">&#34;seccomp_rule_add failed&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Load the seccomp filter context.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">seccomp_load</span>(ctx) <span style="color:#f92672">&lt;</span> <span style="color:#ae81ff">0</span>) {
+</span></span><span style="display:flex;"><span>        <span style="color:#a6e22e">perror</span>(<span style="color:#e6db74">&#34;seccomp_load failed&#34;</span>);
+</span></span><span style="display:flex;"><span>        <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">1</span>;
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Read 4 bytes from the standard input.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">read</span>(<span style="color:#ae81ff">0</span>, buf, <span style="color:#ae81ff">4</span>);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// Release the seccomp filter context.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#a6e22e">seccomp_release</span>(ctx);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The code above makes use of <code>libsecocmp</code> to set a seccomp filter. The code is much more readable and it is less error prone.
+We just create a new seccomp filter context, we add the syscalls that we want to allow to the seccomp filter context and then we load the seccomp filter context. The <code>seccomp_load</code> function will set the seccomp filter and it will also release the seccomp filter context.</p>
+<p>Notice the use of the macro <code>SCMP_SYS</code> to specify the syscall that we want to allow. This macro is used to avoid the use of the syscall number. The syscall number changes from architecture to architecture and it is not portable. The <code>SCMP_SYS</code> macro is used to specify the syscall name and the library will translate the syscall name to the syscall number.</p>
+<p>In order to compile the previous example you need to link the program with the <code>libseccomp</code> library. The following command can be used to compile the previous example:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>gcc -o example_3 example_3.c -lseccomp
+</span></span></code></pre></div><p>In order to understand better what our filter does, <code>libseccomp</code> provides use with some helper functions that can be used to print the seccomp filter. For example adding the following line of code to the previous example just after we add our rules. will print the filter in a human readable format:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#a6e22e">seccomp_export_pfc</span>(ctx, <span style="color:#ae81ff">1</span>);
+</span></span></code></pre></div><p>The output of the previous example is the following:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ ./example_3
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># pseudo filter code start</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># filter for arch x86_64 (3221225534)</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>$arch <span style="color:#f92672">==</span> 3221225534<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#75715e"># filter for syscall &#34;exit_group&#34; (231) [priority: 65535]</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>$syscall <span style="color:#f92672">==</span> 231<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>    action ALLOW;
+</span></span><span style="display:flex;"><span>  <span style="color:#75715e"># filter for syscall &#34;read&#34; (0) [priority: 65535]</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>$syscall <span style="color:#f92672">==</span> 0<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>    action ALLOW;
+</span></span><span style="display:flex;"><span>  <span style="color:#75715e"># default action</span>
+</span></span><span style="display:flex;"><span>  action KILL;
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># invalid architecture action</span>
+</span></span><span style="display:flex;"><span>action KILL;
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># pseudo filter code end</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#</span>
+</span></span></code></pre></div><p>As you can see this functionality is very useful to understand what our filter does and could help us to debug our filter in order to understand why it is not working as expected.</p>
+<h2 id="using-libseccomp-with-go">Using libseccomp with Go</h2>
+<p>The <code>libseccomp</code> provides a nice for Go. First we’re going to write a simple program in Go that uses no <code>libseccomp</code>. Then we’ll try to understand which syscalls are used by this program. Finally we’ll write a new version of the program that uses the <code>libseccomp</code> library to deny all the syscalls that are not used by the program.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> (
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;log&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#e6db74">&#34;os&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// create a new file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">f</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Create</span>(<span style="color:#e6db74">&#34;test.txt&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to create file: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// write to the file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">Write</span>([]byte(<span style="color:#e6db74">&#34;hello world&#34;</span>)); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to write to file: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// close the file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">Close</span>(); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to close file: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Here we’ve a simple program which creates a file.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># build the program</span>
+</span></span><span style="display:flex;"><span>$ go build -o simple main.go
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># now we run the program attached to strace</span>
+</span></span><span style="display:flex;"><span>$ strace -f -c ./simple
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>strace: Process <span style="color:#ae81ff">424724</span> attached
+</span></span><span style="display:flex;"><span>strace: Process <span style="color:#ae81ff">424725</span> attached
+</span></span><span style="display:flex;"><span>strace: Process <span style="color:#ae81ff">424726</span> attached
+</span></span><span style="display:flex;"><span>strace: Process <span style="color:#ae81ff">424727</span> attached
+</span></span><span style="display:flex;"><span>% time     seconds  usecs/call     calls    errors syscall
+</span></span><span style="display:flex;"><span>------ ----------- ----------- --------- --------- ------------------
+</span></span><span style="display:flex;"><span> 41.70    0.000460          <span style="color:#ae81ff">76</span>         <span style="color:#ae81ff">6</span>           nanosleep
+</span></span><span style="display:flex;"><span> 28.38    0.000313          <span style="color:#ae81ff">31</span>        <span style="color:#ae81ff">10</span>         <span style="color:#ae81ff">2</span> futex
+</span></span><span style="display:flex;"><span>  7.71    0.000085          <span style="color:#ae81ff">21</span>         <span style="color:#ae81ff">4</span>           clone
+</span></span><span style="display:flex;"><span>  7.71    0.000085          <span style="color:#ae81ff">42</span>         <span style="color:#ae81ff">2</span>           openat
+</span></span><span style="display:flex;"><span>  3.26    0.000036           <span style="color:#ae81ff">2</span>        <span style="color:#ae81ff">14</span>           rt_sigprocmask
+</span></span><span style="display:flex;"><span>  3.26    0.000036           <span style="color:#ae81ff">4</span>         <span style="color:#ae81ff">9</span>           gettid
+</span></span><span style="display:flex;"><span>  2.27    0.000025           <span style="color:#ae81ff">1</span>        <span style="color:#ae81ff">22</span>           mmap
+</span></span><span style="display:flex;"><span>  2.18    0.000024           <span style="color:#ae81ff">2</span>        <span style="color:#ae81ff">10</span>           sigaltstack
+</span></span><span style="display:flex;"><span>  1.18    0.000013          <span style="color:#ae81ff">13</span>         <span style="color:#ae81ff">1</span>           write
+</span></span><span style="display:flex;"><span>  0.54    0.000006           <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">3</span>           fcntl
+</span></span><span style="display:flex;"><span>  0.54    0.000006           <span style="color:#ae81ff">3</span>         <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">1</span> epoll_ctl
+</span></span><span style="display:flex;"><span>  0.45    0.000005           <span style="color:#ae81ff">5</span>         <span style="color:#ae81ff">1</span>           pipe2
+</span></span><span style="display:flex;"><span>  0.27    0.000003           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">2</span>           close
+</span></span><span style="display:flex;"><span>  0.27    0.000003           <span style="color:#ae81ff">3</span>         <span style="color:#ae81ff">1</span>           epoll_create1
+</span></span><span style="display:flex;"><span>  0.18    0.000002           <span style="color:#ae81ff">2</span>         <span style="color:#ae81ff">1</span>           getrlimit
+</span></span><span style="display:flex;"><span>  0.09    0.000001           <span style="color:#ae81ff">1</span>         <span style="color:#ae81ff">1</span>           setrlimit
+</span></span><span style="display:flex;"><span>  0.00    0.000000           <span style="color:#ae81ff">0</span>         <span style="color:#ae81ff">1</span>           read
+</span></span><span style="display:flex;"><span>  0.00    0.000000           <span style="color:#ae81ff">0</span>       <span style="color:#ae81ff">114</span>           rt_sigaction
+</span></span><span style="display:flex;"><span>  0.00    0.000000           <span style="color:#ae81ff">0</span>         <span style="color:#ae81ff">1</span>           madvise
+</span></span><span style="display:flex;"><span>  0.00    0.000000           <span style="color:#ae81ff">0</span>         <span style="color:#ae81ff">1</span>           execve
+</span></span><span style="display:flex;"><span>  0.00    0.000000           <span style="color:#ae81ff">0</span>         <span style="color:#ae81ff">1</span>           arch_prctl
+</span></span><span style="display:flex;"><span>  0.00    0.000000           <span style="color:#ae81ff">0</span>         <span style="color:#ae81ff">1</span>           sched_getaffinity
+</span></span><span style="display:flex;"><span>------ ----------- ----------- --------- --------- ------------------
+</span></span><span style="display:flex;"><span>100.00    0.001103           <span style="color:#ae81ff">5</span>       <span style="color:#ae81ff">208</span>         <span style="color:#ae81ff">3</span> total
+</span></span></code></pre></div><p>As you can see the program uses a lot of syscalls.</p>
+<p>Now let’s try to write a new version of the program that uses the libseccomp-golang library that has a deny all policy by default.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;log&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;os&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">seccomp</span> <span style="color:#e6db74">&#34;github.com/seccomp/libseccomp-golang&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// create a new filter which kills all the threads in the process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">filter</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">seccomp</span>.<span style="color:#a6e22e">NewFilter</span>(<span style="color:#a6e22e">seccomp</span>.<span style="color:#a6e22e">ActKillProcess</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to create filter: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">filter</span>.<span style="color:#a6e22e">Release</span>()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// set the no new privs bit
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">filter</span>.<span style="color:#a6e22e">SetNoNewPrivsBit</span>(<span style="color:#66d9ef">true</span>) <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to set no new privs bit: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">filter</span>.<span style="color:#a6e22e">Load</span>() <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to load filter: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// create a new file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">f</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Create</span>(<span style="color:#e6db74">&#34;test.txt&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to create file: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// write to the file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">Write</span>([]byte(<span style="color:#e6db74">&#34;hello world&#34;</span>)); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to write to file: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// close the file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">Close</span>(); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to close file: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Lets build the program and run it</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ ./simple
+</span></span><span style="display:flex;"><span>fish: Job 1, <span style="color:#e6db74">&#39;./simple&#39;</span> terminated by signal SIGSYS <span style="color:#f92672">(</span>Bad system call<span style="color:#f92672">)</span>
+</span></span></code></pre></div><p>Ouch! The program has been killed by the kernel because it tried to use a syscall that is not allowed by the filter. Now let’s try to understand which syscall is not allowed.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ strace -f ./simple
+</span></span><span style="display:flex;"><span>...snip...
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426136<span style="color:#f92672">]</span> openat<span style="color:#f92672">(</span>AT_FDCWD, <span style="color:#e6db74">&#34;test.txt&#34;</span>, O_RDWR|O_CREAT|O_TRUNC|O_CLOEXEC, <span style="color:#ae81ff">0666</span> &lt;unfinished ...&gt;
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426137<span style="color:#f92672">]</span> &lt;... nanosleep resumed&gt;NULL<span style="color:#f92672">)</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426137<span style="color:#f92672">]</span> nanosleep<span style="color:#f92672">({</span>tv_sec<span style="color:#f92672">=</span>0, tv_nsec<span style="color:#f92672">=</span>20000<span style="color:#f92672">}</span>,  &lt;unfinished ...&gt;
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426136<span style="color:#f92672">]</span> &lt;... openat resumed&gt;<span style="color:#f92672">)</span>      <span style="color:#f92672">=</span> <span style="color:#ae81ff">257</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426137<span style="color:#f92672">]</span> &lt;... nanosleep resumed&gt;NULL<span style="color:#f92672">)</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">35</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426140<span style="color:#f92672">]</span> &lt;... futex resumed&gt;<span style="color:#f92672">)</span>       <span style="color:#f92672">=</span> ?
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426138<span style="color:#f92672">]</span> &lt;... futex resumed&gt;<span style="color:#f92672">)</span>       <span style="color:#f92672">=</span> ?
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426141<span style="color:#f92672">]</span> &lt;... futex resumed&gt;<span style="color:#f92672">)</span>       <span style="color:#f92672">=</span> ?
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426140<span style="color:#f92672">]</span> +++ killed by SIGSYS <span style="color:#f92672">(</span>core dumped<span style="color:#f92672">)</span> +++
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426138<span style="color:#f92672">]</span> +++ killed by SIGSYS <span style="color:#f92672">(</span>core dumped<span style="color:#f92672">)</span> +++
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426141<span style="color:#f92672">]</span> +++ killed by SIGSYS <span style="color:#f92672">(</span>core dumped<span style="color:#f92672">)</span> +++
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426137<span style="color:#f92672">]</span> +++ killed by SIGSYS <span style="color:#f92672">(</span>core dumped<span style="color:#f92672">)</span> +++
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426139<span style="color:#f92672">]</span> &lt;... futex resumed&gt;<span style="color:#f92672">)</span>       <span style="color:#f92672">=</span> ?
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 426139<span style="color:#f92672">]</span> +++ killed by SIGSYS <span style="color:#f92672">(</span>core dumped<span style="color:#f92672">)</span> +++
+</span></span><span style="display:flex;"><span>+++ killed by SIGSYS <span style="color:#f92672">(</span>core dumped<span style="color:#f92672">)</span> +++
+</span></span><span style="display:flex;"><span>fish: Job 1, <span style="color:#e6db74">&#39;strace -f ./simple&#39;</span> terminated by signal SIGSYS <span style="color:#f92672">(</span>Bad system call<span style="color:#f92672">)</span>
+</span></span></code></pre></div><p>As we can see there’s quite few syscall that are not allowed by the filter. Now let’s try to add the syscalls that we need
+to the filter from the first output where we <code>straced</code> the program without <code>seccomp</code>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;log&#34;</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#e6db74">&#34;os&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#a6e22e">seccomp</span> <span style="color:#e6db74">&#34;github.com/seccomp/libseccomp-golang&#34;</span>
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">var</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// string slice of syscall names
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">syscalls</span> = []<span style="color:#66d9ef">string</span>{
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;nanosleep&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;futex&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;clone&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;openat&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;rt_sigprocmask&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;gettid&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;mmap&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;sigaltstack&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;write&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;fcntl&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;epoll_ctl&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;pipe2&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;close&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;epoll_create1&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;getrlimit&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;setrlimit&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;read&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;rt_sigaction&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;madvise&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;execve&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;arch_prctl&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;sched_getaffinity&#34;</span>,
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// create a new filter which kills all the threads in the process
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">filter</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">seccomp</span>.<span style="color:#a6e22e">NewFilter</span>(<span style="color:#a6e22e">seccomp</span>.<span style="color:#a6e22e">ActKillProcess</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to create filter: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">defer</span> <span style="color:#a6e22e">filter</span>.<span style="color:#a6e22e">Release</span>()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// set the no new privs bit
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">filter</span>.<span style="color:#a6e22e">SetNoNewPrivsBit</span>(<span style="color:#66d9ef">true</span>) <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to set no new privs bit: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// iterate over the syscalls slice and add them to the filter
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">for</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">syscall</span> <span style="color:#f92672">:=</span> <span style="color:#66d9ef">range</span> <span style="color:#a6e22e">syscalls</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#75715e">// resolve syscall number
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#a6e22e">seccompSys</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">seccomp</span>.<span style="color:#a6e22e">GetSyscallFromName</span>(<span style="color:#a6e22e">syscall</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to get syscall: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="color:#75715e">// add the syscall to the filter
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">filter</span>.<span style="color:#a6e22e">AddRule</span>(<span style="color:#a6e22e">seccompSys</span>, <span style="color:#a6e22e">seccomp</span>.<span style="color:#a6e22e">ActAllow</span>) <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>			<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to add rule: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">filter</span>.<span style="color:#a6e22e">Load</span>() <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to load filter: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// create a new file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">f</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">os</span>.<span style="color:#a6e22e">Create</span>(<span style="color:#e6db74">&#34;test.txt&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to create file: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// write to the file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">_</span>, <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">Write</span>([]byte(<span style="color:#e6db74">&#34;hello world&#34;</span>)); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to write to file: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// close the file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">f</span>.<span style="color:#a6e22e">Close</span>(); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+</span></span><span style="display:flex;"><span>		<span style="color:#a6e22e">log</span>.<span style="color:#a6e22e">Fatal</span>(<span style="color:#e6db74">&#34;failed to close file: &#34;</span>, <span style="color:#a6e22e">err</span>)
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>As you can see the logic is pretty similar to our first C example, we just iterate over the syscalls slice and add them to the filter.</p>
+<p>Now let’s build and run the program.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>./simple 
+</span></span><span style="display:flex;"><span>fish: Job 1, <span style="color:#e6db74">&#39;./simple&#39;</span> terminated by signal SIGSYS <span style="color:#f92672">(</span>Bad system call<span style="color:#f92672">)</span>
+</span></span></code></pre></div><p>…and again we get the same error. Now let’s try to understand which syscall is not allowed.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ strace -f ./simple
+</span></span><span style="display:flex;"><span><span style="color:#f92672">[</span>pid 427733<span style="color:#f92672">]</span> exit_group<span style="color:#f92672">(</span>0<span style="color:#f92672">)</span>              <span style="color:#f92672">=</span> <span style="color:#ae81ff">231</span>
+</span></span></code></pre></div><p>All right our program after all needs to clean exit, so let’s add the <code>exit_group</code> syscall to the filter.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#f92672">...</span><span style="color:#a6e22e">snip</span><span style="color:#f92672">...</span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">var</span> (
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">// string slice of syscall names
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>	<span style="color:#a6e22e">syscalls</span> = []<span style="color:#66d9ef">string</span>{
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;nanosleep&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;futex&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;clone&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;openat&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;rt_sigprocmask&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;gettid&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;mmap&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;sigaltstack&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;write&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;fcntl&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;epoll_ctl&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;pipe2&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;close&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;epoll_create1&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;getrlimit&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;setrlimit&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;read&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;rt_sigaction&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;madvise&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;execve&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;arch_prctl&#34;</span>,
+</span></span><span style="display:flex;"><span>		<span style="color:#e6db74">&#34;sched_getaffinity&#34;</span>,
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span><span style="color:#f92672">...</span><span style="color:#a6e22e">snip</span><span style="color:#f92672">...</span>
+</span></span></code></pre></div><p>Now let’s build and run the program.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ ./simple
+</span></span><span style="display:flex;"><span>$ cat test.txt 
+</span></span><span style="display:flex;"><span>hello world⏎
+</span></span></code></pre></div><p>And here we go, we have a working program that is now seccomp enabled.
+There’s also other syscalls that we could remove from the filter, but I’ll leave that as an exercise for the reader.
+Hint: <code>strace</code> the program and try to understand which syscall is not needed, for example <code>arch_prctl</code> is not needed because it used by the loader, and execve is not needed because we are not executing any other program, it is used by the loader to execute the program.</p>
+<h2 id="seccomp-in-rust">Seccomp in Rust</h2>
+<p>Here’s the same example in Rust, using the <a href="https://crates.io/crates/libseccomp">libseccomp</a> crate.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-rust" data-lang="rust"><span style="display:flex;"><span><span style="color:#66d9ef">use</span> std::{fs::File, io::Write};
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">use</span> libseccomp::{ScmpFilterContext, ScmpAction, ScmpSyscall};
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">fn</span> <span style="color:#a6e22e">main</span>() {
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// create a new filter
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> filter <span style="color:#f92672">=</span> ScmpFilterContext::new_filter(ScmpAction::KillProcess).unwrap();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// add architecture to filter
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">let</span> rule_openat_sys <span style="color:#f92672">=</span> ScmpSyscall::from_name(<span style="color:#e6db74">&#34;openat&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> rule_write_sys <span style="color:#f92672">=</span> ScmpSyscall::from_name(<span style="color:#e6db74">&#34;write&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> rule_fsync_sys <span style="color:#f92672">=</span> ScmpSyscall::from_name(<span style="color:#e6db74">&#34;fsync&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> rule_close_sys <span style="color:#f92672">=</span> ScmpSyscall::from_name(<span style="color:#e6db74">&#34;close&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> rule_sigaltstack_sys <span style="color:#f92672">=</span> ScmpSyscall::from_name(<span style="color:#e6db74">&#34;sigaltstack&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> rule_munmap_sys <span style="color:#f92672">=</span> ScmpSyscall::from_name(<span style="color:#e6db74">&#34;munmap&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">let</span> rule_exit_group_sys <span style="color:#f92672">=</span> ScmpSyscall::from_name(<span style="color:#e6db74">&#34;exit_group&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    filter.add_rule(ScmpAction::Allow, rule_openat_sys).unwrap();
+</span></span><span style="display:flex;"><span>    filter.add_rule(ScmpAction::Allow, rule_write_sys).unwrap();
+</span></span><span style="display:flex;"><span>    filter.add_rule(ScmpAction::Allow, rule_fsync_sys).unwrap();
+</span></span><span style="display:flex;"><span>    filter.add_rule(ScmpAction::Allow, rule_close_sys).unwrap();
+</span></span><span style="display:flex;"><span>    filter.add_rule(ScmpAction::Allow, rule_sigaltstack_sys).unwrap();
+</span></span><span style="display:flex;"><span>    filter.add_rule(ScmpAction::Allow, rule_munmap_sys).unwrap();
+</span></span><span style="display:flex;"><span>    filter.add_rule(ScmpAction::Allow, rule_exit_group_sys).unwrap();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    filter.load().unwrap();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// create a file
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    <span style="color:#66d9ef">let</span> <span style="color:#66d9ef">mut</span> file <span style="color:#f92672">=</span> File::create(<span style="color:#e6db74">&#34;foo.txt&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// write some content
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    file.write_all(<span style="color:#e6db74">b</span><span style="color:#e6db74">&#34;Hello, world!&#34;</span>).unwrap();
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">// sync content
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>    file.sync_all().unwrap();
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Previous example is straightforward and pretty similar to C and Go ones. Of course used syscalls vary based on the language, since Go runtime uses some syscalls that are not used by Rust. Bare also in mind that while writing code we often need to use more than one library, and each library may use different syscalls, so you may need to add more syscalls to the filter.</p>
+<h2 id="bonus-where-my-filter-lives">Bonus: where my filter lives?</h2>
+<p>In this example we’re going to use drgn to inspect the filter that we’ve just added to the process. Drgn is a debugger which allows you to inspect the kernel and user space, and it’s written in Python.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span><span style="color:#75715e"># first we start our libseccomp example program in gdb</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># and put a breakpoint just after the seccomp filter is loaded</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># (notice we compile the program with debugging symbols)</span>
+</span></span><span style="display:flex;"><span>$ gcc -o example_3 example_3.c -lseccomp -ggdb2
+</span></span><span style="display:flex;"><span>$ gdb -q ./example_3 
+</span></span><span style="display:flex;"><span>pwndbg&gt; b example_3.c:48
+</span></span><span style="display:flex;"><span>Breakpoint <span style="color:#ae81ff">1</span> at 0x4012be: file example_3.c, line 48.
+</span></span><span style="display:flex;"><span>pwndbg&gt; r
+</span></span><span style="display:flex;"><span>...snip...
+</span></span><span style="display:flex;"><span>In file: .../seccomp/example_3.c
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">43</span>         perror<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;seccomp_load failed&#34;</span><span style="color:#f92672">)</span>;
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">44</span>         <span style="color:#66d9ef">return</span> 1;
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">45</span>     <span style="color:#f92672">}</span>
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">46</span> 
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">47</span>     // Read <span style="color:#ae81ff">4</span> bytes from the standard input.
+</span></span><span style="display:flex;"><span> ► <span style="color:#ae81ff">48</span>     read<span style="color:#f92672">(</span>0, buf, 4<span style="color:#f92672">)</span>;
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">49</span> 
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">50</span>     // Release the seccomp filter context.
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">51</span>     seccomp_release<span style="color:#f92672">(</span>ctx<span style="color:#f92672">)</span>;
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">52</span> 
+</span></span><span style="display:flex;"><span>   <span style="color:#ae81ff">53</span>     <span style="color:#66d9ef">return</span> 0;
+</span></span><span style="display:flex;"><span>...snip...
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>pwndbg&gt; procinfo
+</span></span><span style="display:flex;"><span>exe        <span style="color:#e6db74">&#39;.../seccomp/example_3&#39;</span>
+</span></span><span style="display:flex;"><span>pid        <span style="color:#ae81ff">445243</span>
+</span></span><span style="display:flex;"><span>tid        <span style="color:#ae81ff">445243</span>
+</span></span><span style="display:flex;"><span>selinux    unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023
+</span></span><span style="display:flex;"><span>ppid       <span style="color:#ae81ff">445170</span>
+</span></span><span style="display:flex;"><span>uid        <span style="color:#f92672">[</span>1000, 1000, 1000, 1000<span style="color:#f92672">]</span>
+</span></span><span style="display:flex;"><span>gid        <span style="color:#f92672">[</span>1000, 1000, 1000, 1000<span style="color:#f92672">]</span>
+</span></span><span style="display:flex;"><span>groups     <span style="color:#f92672">[</span>10, 973, 1000<span style="color:#f92672">]</span>
+</span></span><span style="display:flex;"><span>fd<span style="color:#f92672">[</span>0<span style="color:#f92672">]</span>      /dev/pts/1
+</span></span><span style="display:flex;"><span>fd<span style="color:#f92672">[</span>1<span style="color:#f92672">]</span>      /dev/pts/1
+</span></span><span style="display:flex;"><span>fd<span style="color:#f92672">[</span>2<span style="color:#f92672">]</span>      /dev/pts/1
+</span></span></code></pre></div><p>In another terminal we start <a href="https://github.com/osandov/drgn">drgn</a> and attach to the process:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ sudo drgn
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># here we use the find_task function to get the task_struct</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Linux kernel uses the task_struct to refer to a process</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; t <span style="color:#f92672">=</span> find_task<span style="color:#f92672">(</span>prog, 445243<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; t.type_
+</span></span><span style="display:flex;"><span>struct task_struct *
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># as you can see the task_struct has a seccomp field</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; prog.type<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;struct task_struct&#34;</span><span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>struct task_struct <span style="color:#f92672">{</span>
+</span></span><span style="display:flex;"><span>	struct thread_info thread_info;
+</span></span><span style="display:flex;"><span>	unsigned int __state;
+</span></span><span style="display:flex;"><span>	void *stack;
+</span></span><span style="display:flex;"><span>...snipped...
+</span></span><span style="display:flex;"><span>	kuid_t loginuid;
+</span></span><span style="display:flex;"><span>	unsigned int sessionid;
+</span></span><span style="display:flex;"><span>	struct seccomp seccomp;
+</span></span><span style="display:flex;"><span>	struct syscall_user_dispatch syscall_dispatch;
+</span></span><span style="display:flex;"><span>	u64 parent_exec_id;
+</span></span><span style="display:flex;"><span>...snipped...
+</span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># we&#39;re interested into the filter which is a pointer to a seccomp_filter struct</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; t.seccomp
+</span></span><span style="display:flex;"><span><span style="color:#f92672">(</span>struct seccomp<span style="color:#f92672">){</span>
+</span></span><span style="display:flex;"><span>	.mode <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>int<span style="color:#f92672">)</span>2,
+</span></span><span style="display:flex;"><span>	.filter_count <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>atomic_t<span style="color:#f92672">){</span>
+</span></span><span style="display:flex;"><span>		.counter <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>int<span style="color:#f92672">)</span>1,
+</span></span><span style="display:flex;"><span>	<span style="color:#f92672">}</span>,
+</span></span><span style="display:flex;"><span>	.filter <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>struct seccomp_filter *<span style="color:#f92672">)</span>0xffff922e3529c300,
+</span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># we&#39;re near... here there&#39;s the pointer bpf_prog structure</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; t.seccomp.filter
+</span></span><span style="display:flex;"><span>*<span style="color:#f92672">(</span>struct seccomp_filter *<span style="color:#f92672">)</span>0xffff922e3529c300 <span style="color:#f92672">=</span> <span style="color:#f92672">{</span>
+</span></span><span style="display:flex;"><span>...snipped...
+</span></span><span style="display:flex;"><span>	.prev <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>struct seccomp_filter *<span style="color:#f92672">)</span>0x0,
+</span></span><span style="display:flex;"><span>	.prog <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>struct bpf_prog *<span style="color:#f92672">)</span>0xffffb3e5089c5000,
+</span></span><span style="display:flex;"><span>...snipped...
+</span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># great! here is it!</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; t.seccomp.filter.prog
+</span></span><span style="display:flex;"><span>*<span style="color:#f92672">(</span>struct bpf_prog *<span style="color:#f92672">)</span>0xffffb3e5089c5000 <span style="color:#f92672">=</span> <span style="color:#f92672">{</span>
+</span></span><span style="display:flex;"><span>	.pages <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>u16<span style="color:#f92672">)</span>1,
+</span></span><span style="display:flex;"><span>	.jited <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>u16<span style="color:#f92672">)</span>1,                                // &lt;-- this means the filter is JITed
+</span></span><span style="display:flex;"><span>	.jit_requested <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>u16<span style="color:#f92672">)</span>1,
+</span></span><span style="display:flex;"><span>...snipped...
+</span></span><span style="display:flex;"><span>	.len <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>u32<span style="color:#f92672">)</span>16,
+</span></span><span style="display:flex;"><span>	.jited_len <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>u32<span style="color:#f92672">)</span>84,                           // &lt;-- this is the size of the filter jited code
+</span></span><span style="display:flex;"><span>	.tag <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>u8 <span style="color:#f92672">[</span>8<span style="color:#f92672">]){}</span>,
+</span></span><span style="display:flex;"><span>	.stats <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>struct bpf_prog_stats *<span style="color:#f92672">)</span>0x41b40fc0f150,
+</span></span><span style="display:flex;"><span>	.active <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>int *<span style="color:#f92672">)</span>0x41b40fc03218,
+</span></span><span style="display:flex;"><span>	.bpf_func <span style="color:#f92672">=</span> <span style="color:#f92672">(</span>unsigned int <span style="color:#f92672">(</span>*<span style="color:#f92672">)(</span>const void *, const struct bpf_insn *<span style="color:#f92672">))</span>0xffffffffc030d8e0,    // &lt;-- this is the address of the filter jited code
+</span></span><span style="display:flex;"><span>...snipped...
+</span></span><span style="display:flex;"><span><span style="color:#f92672">}</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># so what do we do now? we can use the bpf_func address to dump the filter code</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># and disassemble it.</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># we know the filter is 84 bytes long, so we can read 84 bytes from the address</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; buf <span style="color:#f92672">=</span> prog.read<span style="color:#f92672">(</span>0xffffffffc030d8e0, 84<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># we use capstone library to disassemble the code</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; from capstone import *
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; md <span style="color:#f92672">=</span> Cs<span style="color:#f92672">(</span>CS_ARCH_X86, CS_MODE_64<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>&gt;&gt;&gt; <span style="color:#66d9ef">for</span> i in md.disasm<span style="color:#f92672">(</span>buf, 0x0<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>...     print<span style="color:#f92672">(</span><span style="color:#e6db74">&#34;0x%x:\t%s\t%s&#34;</span> %<span style="color:#f92672">(</span>i.address, i.mnemonic, i.op_str<span style="color:#f92672">))</span>
+</span></span><span style="display:flex;"><span>... 
+</span></span><span style="display:flex;"><span>0x0:	nop	dword ptr <span style="color:#f92672">[</span>rax + rax<span style="color:#f92672">]</span>       &lt;-- this is the first instruction of the filter a NOOP
+</span></span><span style="display:flex;"><span>0x5:	push	rbp                     &lt;-- this saves rbp register which will be used later to index the stack
+</span></span><span style="display:flex;"><span>0x6:	mov	rbp, rsp                    &lt;-- this stores the stack pointer value to rbp
+</span></span><span style="display:flex;"><span>0x9:	push	rbx                     &lt;-- save rbp
+</span></span><span style="display:flex;"><span>0xa:	push	r13                     &lt;-- save r13
+</span></span><span style="display:flex;"><span>0xc:	xor	eax, eax                    &lt;-- set eax to <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>0xe:	xor	r13d, r13d                  &lt;-- set r13 to <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>0x11:	mov	rbx, rdi                    &lt;-- rdi points to seccomp_data struct filled with current syscall data
+</span></span><span style="display:flex;"><span>0x14:	mov	eax, dword ptr <span style="color:#f92672">[</span>rbx + 4<span style="color:#f92672">]</span>    &lt;-- eax is set to arch field of seccomp_data struct
+</span></span><span style="display:flex;"><span>0x17:	mov	esi, 0xc000003e             &lt;-- set rsi to 0xc000003e <span style="color:#f92672">(</span>x86_64<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>0x1c:	cmp	rax, rsi                    &lt;-- compare eax with rsi
+</span></span><span style="display:flex;"><span>0x1f:	jne	0x50                        &lt;-- <span style="color:#66d9ef">if</span> eax !<span style="color:#f92672">=</span> rsi jump to 0x50 and <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span> forbidding the syscall
+</span></span><span style="display:flex;"><span>0x21:	mov	eax, dword ptr <span style="color:#f92672">[</span>rbx<span style="color:#f92672">]</span>        &lt;-- eax is set to nr field of seccomp_data struct
+</span></span><span style="display:flex;"><span>0x24:	cmp	rax, 0x40000000             &lt;-- compare eax with 0x40000000 __X32_SYSCALL_BIT <span style="color:#66d9ef">if</span> above <span style="color:#ae81ff">32</span> bit syscall, <span style="color:#66d9ef">if</span> below <span style="color:#ae81ff">64</span> bit syscall
+</span></span><span style="display:flex;"><span>0x2b:	jb	0x37                        &lt;-- <span style="color:#66d9ef">if</span> eax &lt; 0x40000000 jump to 0x37  
+</span></span><span style="display:flex;"><span>0x2d:	mov	esi, 0xffffffff             &lt;-- set rsi to 0xffffffff <span style="color:#f92672">(</span>-1<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>0x32:	cmp	rax, rsi                    &lt;-- compare rax with rsi
+</span></span><span style="display:flex;"><span>0x35:	jne	0x50                        &lt;-- <span style="color:#66d9ef">if</span> rax !<span style="color:#f92672">=</span> rsi jump to 0x50 and <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span> forbidding the syscall
+</span></span><span style="display:flex;"><span>0x37:	test	rax, rax                &lt;-- test rax with rax is shorthand <span style="color:#66d9ef">for</span> cmp rax, <span style="color:#ae81ff">0</span> -&gt; read syscall number
+</span></span><span style="display:flex;"><span>0x3a:	je	0x45                        &lt;-- <span style="color:#66d9ef">if</span> rax <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span> jump to 0x45 and allow the read syscall
+</span></span><span style="display:flex;"><span>0x3c:	cmp	rax, 0xe7                   &lt;-- compare rax with 0xe7 -&gt; exit_group syscall
+</span></span><span style="display:flex;"><span>0x43:	jne	0x50                        &lt;-- <span style="color:#66d9ef">if</span> rax !<span style="color:#f92672">=</span> 0xe7 jump to 0x50 and <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span> forbidding the syscall
+</span></span><span style="display:flex;"><span>0x45:	mov	eax, 0x7fff0000             &lt;-- set eax to 0x7fff0000
+</span></span><span style="display:flex;"><span>0x4a:	pop	r13                         &lt;-- restore r13
+</span></span><span style="display:flex;"><span>0x4c:	pop	rbx                         &lt;-- restore rbx
+</span></span><span style="display:flex;"><span>0x4d:	leave	                        &lt;-- restore rbp
+</span></span><span style="display:flex;"><span>0x4e:	ret	                            &lt;-- <span style="color:#66d9ef">return</span> 0x7fff0000 allowing the syscall
+</span></span><span style="display:flex;"><span>0x4f:	int3	                        &lt;-- not sure why this int3 is here, probably to trap the process <span style="color:#66d9ef">for</span> some reason
+</span></span><span style="display:flex;"><span>0x50:	xor	eax, eax                    &lt;-- set eax to <span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>0x52:	jmp	0x4a                        &lt;-- jump to 0x4a and <span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span> forbidding the syscall
+</span></span></code></pre></div><h2 id="conclusion">Conclusion</h2>
+<p>This post was just an introduction to seccomp and how to use it. I hope it will be useful for someone. We started with the basics of seccomp, then we saw how to use it in various programming languages and finally we took a look at how it works on the kernel side. I hope you enjoyed it and learned something new. Reader is encouraged to read documentation an references provided at the end of this post and try to write a seccomp filter for a syscall and see how it works.</p>
+<h3 id="references">References</h3>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Seccomp">Seccomp</a></li>
+<li><a href="https://www.kernel.org/doc/html/latest/userspace-api/seccomp_filter.html">Seccomp filter</a></li>
+<li><a href="https://man7.org/linux/man-pages/man2/seccomp.2.html">Seccomp man</a></li>
+<li><a href="https://github.com/seccomp/libseccomp">Seccomp C library</a></li>
+<li><a href="https://github.com/seccomp/libseccomp-golang">Seccomp Go library</a></li>
+<li><a href="https://crates.io/crates/libseccomp">Seccomp Rust library</a></li>
+</ul>
+
+      </div>
+    </article>
+
+    <hr />
+
+    <div class="post-info">
+      
+    <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-tag meta-icon"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7" y2="7"></line></svg>
+
+        <span class="tag"><a href="https://example.org/tags/linux/">linux</a></span>
+        <span class="tag"><a href="https://example.org/tags/security/">security</a></span>
+        <span class="tag"><a href="https://example.org/tags/applications/">applications</a></span>
+        
+    </p>
+
+      
+    <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-folder meta-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+
+        <span class="tag"><a href="https://example.org/categories/security/">security</a></span>
+        <span class="tag"><a href="https://example.org/categories/series/">series</a></span>
+        
+    </p>
+
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file-text">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        5237 Words
+      </p>
+
+      <p>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-calendar">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        
+          2023-01-17 01:00
+        
+
+         
+          
+        
+      </p>
+    </div>
+
+    
+    <div class="pagination">
+        
+
+        <div class="pagination__buttons">
+            
+            <span class="button previous">
+                <a href="https://example.org/posts/11-landlock-2023/">
+                    <span class="button__icon">←</span>
+                    <span class="button__text">Intro to Landlock</span>
+                </a>
+            </span>
+            
+
+            
+            <span class="button next">
+                <a href="https://example.org/posts/09-books-2022/">
+                    <span class="button__text">Books list 2022</span>
+                    <span class="button__icon">→</span>
+                </a>
+            </span>
+            
+        </div>
+    </div>
+
+
+    
+
+    
+
+    
+
+  </main>
+
+            </div>
+
+            
+                <footer class="footer">
+    
+    
+</footer>
+
+            
+        </div>
+
+        
+
+
+
+<script type="text/javascript" src="/bundle.min.85fad2de4f13fec3bcb3b3cb10430cdb44a7b4a9749b32938241a5c6e77718df7624f1002b880521fdc26e24ec1077fda214bf1cb36ee3045510760d09638cae.js" integrity="sha512-hfrS3k8T/sO8s7PLEEMM20SntKl0mzKTgkGlxud3GN92JPEAK4gFIf3CbiTsEHf9ohS/HLNu4wRVEHYNCWOMrg=="></script>
+
+
+
+
+    </body>
+</html>

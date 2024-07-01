@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Linux on 0xcf9</title>
+    <link>https://example.org/categories/linux/</link>
+    <description>Recent content in Linux on 0xcf9</description>
+    <generator>Hugo</generator>
+    <language>en-us</language>
+    <lastBuildDate>Thu, 12 Oct 2023 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://example.org/categories/linux/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Intro to Keyrings</title>
+      <link>https://example.org/posts/10-keyrings-2023/</link>
+      <pubDate>Thu, 12 Oct 2023 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/10-keyrings-2023/</guid>
+      <description>This is the third part of the series on securing applications on Linux. The first part was about Linux Seccompand the second part was about Linux Landlock. This third part is about Linux Keyrings.&#xA;What are Linux Keyrings? As usual we start citing the appropriate man page, keyrings(7):&#xA;The Linux key-management facility is primarily a way for various kernel components to retain or cache security data, authentication keys, encryption keys, and other data in the kernel System call interfaces are provided so that user-space programs can manage those objects and also use the facility for their own purposes; see add_key(2), request_key(2), and keyctl(2).</description>
+    </item>
+    <item>
+      <title>Intro to Landlock</title>
+      <link>https://example.org/posts/11-landlock-2023/</link>
+      <pubDate>Tue, 25 Jul 2023 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/11-landlock-2023/</guid>
+      <description>In a previous article we shown up how it is possible to make our applications more secure through the use of seccomp which allows us to restrict the syscalls that a process or a thread can invoke. In this article we will see how to use Landlock LSM to further improve the security of our applications.&#xA;Introduction: What&amp;rsquo;s Landlock? Landlock is a Linux security module that allows to restrict the access to the filesystem.</description>
+    </item>
+  </channel>
+</rss>

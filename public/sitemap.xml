@@ -3,7 +3,55 @@
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://example.org/</loc>
-    <lastmod>2022-12-31T17:46:40+02:00</lastmod>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/tags/applications/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/categories/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/posts/10-keyrings-2023/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/tags/keyrings/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/categories/keyrings/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/tags/linux/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/categories/linux/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/posts/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/tags/security/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/categories/security/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/tags/</loc>
+    <lastmod>2023-10-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/posts/11-landlock-2023/</loc>
+    <lastmod>2023-07-25T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/tags/landlock/</loc>
+    <lastmod>2023-07-25T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/categories/landlock/</loc>
+    <lastmod>2023-07-25T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/posts/12-seccomp-2023/</loc>
+    <lastmod>2023-01-17T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/categories/series/</loc>
+    <lastmod>2023-01-17T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://example.org/tags/books/</loc>
     <lastmod>2022-12-31T17:46:40+02:00</lastmod>
@@ -11,11 +59,20 @@
     <loc>https://example.org/posts/09-books-2022/</loc>
     <lastmod>2022-12-31T17:46:40+02:00</lastmod>
   </url><url>
-    <loc>https://example.org/posts/</loc>
-    <lastmod>2022-12-31T17:46:40+02:00</lastmod>
+    <loc>https://example.org/tags/go/</loc>
+    <lastmod>2022-11-08T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://example.org/tags/</loc>
-    <lastmod>2022-12-31T17:46:40+02:00</lastmod>
+    <loc>https://example.org/tags/golang/</loc>
+    <lastmod>2022-11-08T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/categories/networking/</loc>
+    <lastmod>2022-11-08T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/tags/programming/</loc>
+    <lastmod>2022-11-08T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://example.org/posts/13-traceroute-2022/</loc>
+    <lastmod>2022-11-08T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://example.org/posts/02-libfuzzer/</loc>
     <lastmod>2022-02-17T14:55:03+02:00</lastmod>
@@ -27,9 +84,6 @@
     <lastmod>2022-02-17T14:55:03+02:00</lastmod>
   </url><url>
     <loc>https://example.org/tags/libfuzzer/</loc>
-    <lastmod>2022-02-17T14:55:03+02:00</lastmod>
-  </url><url>
-    <loc>https://example.org/tags/linux/</loc>
     <lastmod>2022-02-17T14:55:03+02:00</lastmod>
   </url><url>
     <loc>https://example.org/tags/low-level/</loc>
@@ -57,9 +111,6 @@
     <lastmod>2022-01-19T17:11:33+02:00</lastmod>
   </url><url>
     <loc>https://example.org/posts/04-go-dll-inject/</loc>
-    <lastmod>2022-01-19T17:11:33+02:00</lastmod>
-  </url><url>
-    <loc>https://example.org/tags/golang/</loc>
     <lastmod>2022-01-19T17:11:33+02:00</lastmod>
   </url><url>
     <loc>https://example.org/tags/injection/</loc>
@@ -91,7 +142,5 @@
   </url><url>
     <loc>https://example.org/tags/shared-library/</loc>
     <lastmod>2017-01-30T17:22:16+02:00</lastmod>
-  </url><url>
-    <loc>https://example.org/categories/</loc>
   </url>
 </urlset>
